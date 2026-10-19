@@ -92,6 +92,12 @@ tbody tr:hover td{background:#F7F9FD}
 .gchip{display:inline-block;min-width:22px;padding:2px 6px;border-radius:6px;font-weight:800;font-size:12px;color:#3a3a3a}
 .avg-badge{display:inline-block;padding:3px 10px;border-radius:8px;font-weight:800;color:#3a3a3a}
 .achv{display:inline-block;min-width:26px;padding:2px 6px;border-radius:6px;font-weight:800;font-size:12px}
+.g9est{display:inline-block;margin-left:4px;font-size:10px;font-weight:700;color:#B8560A;background:#FFF1E0;
+       border-radius:5px;padding:1px 5px;vertical-align:middle;white-space:nowrap}
+.seg-sm{display:inline-flex;background:#F1F4F9;border-radius:9px;padding:3px;gap:3px}
+.seg-sm button{border:none;background:none;font-family:inherit;font-size:12px;font-weight:700;
+       color:#8A97AB;padding:5px 12px;border-radius:7px;cursor:pointer}
+.seg-sm button.on{background:#fff;color:var(--navy);box-shadow:0 1px 3px rgba(0,0,0,.09)}
 
 /* 버튼 */
 .btn{border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px;
@@ -175,12 +181,24 @@ select:focus,input:focus{border-color:var(--blue)}
 
 /* 인쇄 */
 @media print{
-  body{background:#fff;font-size:11pt}
+  body{background:#fff;font-size:9.5pt}
   .topbar .top-actions,.tabs,.sembar,.ov,.toast,.no-print{display:none!important}
-  .wrap{max-width:100%;padding:10px}
-  .card{break-inside:avoid;box-shadow:none;border:1px solid #ddd;page-break-inside:avoid}
-  .grid{gap:12px}
-  @page{margin:1.5cm}
+  .wrap{max-width:100%;padding:4px}
+  .card{box-shadow:none;border:1px solid #ddd;padding:10px;break-inside:auto}
+  .card-head{margin-bottom:2px}
+  .card h3{font-size:12.5px}
+  .card .sub{font-size:9.5px;margin-bottom:6px}
+  .grid{gap:8px;margin-top:8px}
+  table{font-size:9pt}
+  th,td{padding:3px 4px}
+  thead th{font-size:8.5pt}
+  .print-block{break-inside:avoid;margin-top:10px!important}
+  .print-hide{display:none!important}
+  .chartbox svg,.scroll svg{max-height:130px;width:auto!important;min-width:0!important;max-width:100%}
+  .legend{margin-top:4px;font-size:9pt;gap:8px}
+  h1{font-size:15px}
+  .title-wrap p{font-size:10px}
+  @page{margin:1cm}
 }
 @media(max-width:760px){.g2,.g3,.g4{grid-template-columns:1fr}.wrap{padding:16px 12px 60px}}
 </style>
@@ -207,6 +225,9 @@ select:focus,input:focus{border-color:var(--blue)}
   <div class="sembar">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
       <div class="lbl" style="margin:0">등록된 학기</div>
+      <button class="btn btn-ghost no-print" id="btnClearSaved" style="font-size:12px;padding:5px 12px;margin-left:auto;margin-right:8px">
+        🗑 이 브라우저에 저장된 성적 삭제
+      </button>
       <button class="btn btn-ghost no-print" id="btnMergeDup" style="font-size:12px;padding:5px 12px;display:none">
         🔧 중복 학기 정리
       </button>
@@ -346,8 +367,74 @@ const state={
   selSem:null,   // 대시보드 선택 학기
   selBan:null,
   selStudent:null,
-  comboChartType:'line', // 교과조합 추이 차트: 'line' | 'bar'
+  comboChartType:'bar', // 교과조합 추이 차트: 'line' | 'bar' (학생 성적 조회 기본값: 막대)
+  subjChartType:'line', // 학기별 과목 석차등급 차트: 'line' | 'bar'
+  distChartType:'line',  // 등급 분포도 차트: 'line' | 'bar'
+  printExcludeSubjCharts:false, // 인쇄 시 '학기별 과목 그래프' 제외
+  printExcludeComboChart:false, // 인쇄 시 '교과조합 추이 차트' 제외
+  grade9Source:'daejin', // 9등급 환산 기준: 'daejin' | 'wooseong'
 };
+
+// ─── 5등급제 ↔ 9등급제 환산 자료 ────────────────────────────
+// 대진대학교 "내신 등급 변환표 (5등급→9등급)" — [5등급값, 9등급(평균) 추정치]
+// 전국 23개교 고3 6,087명(2025) 원점수 기반 중간석차 백분위 환산 연구자료
+const DAEJIN_TABLE=[
+  [1.00,1.18],[1.05,1.36],[1.10,1.51],[1.15,1.63],[1.20,1.73],[1.25,1.85],[1.30,1.95],[1.35,2.05],[1.40,2.14],[1.45,2.25],
+  [1.50,2.34],[1.55,2.42],[1.60,2.48],[1.65,2.61],[1.70,2.69],[1.75,2.79],[1.80,2.82],[1.85,2.97],[1.90,3.06],[1.95,3.15],
+  [2.00,3.21],[2.05,3.33],[2.10,3.40],[2.15,3.53],[2.20,3.60],[2.25,3.68],[2.30,3.77],[2.35,3.86],[2.40,3.97],[2.45,4.03],
+  [2.50,4.11],[2.55,4.20],[2.60,4.27],[2.65,4.38],[2.70,4.45],[2.75,4.54],[2.80,4.62],[2.85,4.71],[2.90,4.78],[2.95,4.86],
+  [3.00,4.94],[3.05,5.04],[3.10,5.14],[3.15,5.21],[3.20,5.30],[3.25,5.37],[3.30,5.46],[3.35,5.52],[3.40,5.63],[3.45,5.70],
+  [3.50,5.80],[3.55,5.84],[3.60,5.96],[3.65,6.05],[3.70,6.11],[3.75,6.20],[3.80,6.27],[3.85,6.37],[3.90,6.48],[3.95,6.56],
+  [4.00,6.65],[4.05,6.74],[4.10,6.84],[4.15,6.91],[4.20,7.01],[4.25,7.10],[4.30,7.20],[4.35,7.31],[4.40,7.38],[4.45,7.42],
+  [4.50,7.51],[4.55,7.60],[4.60,7.75],[4.65,7.90],[4.70,7.96],[4.75,8.07],[4.80,8.14],[4.85,8.25],[4.90,8.49],[4.95,8.64],
+  [5.00,8.74],
+];
+// 우성고 김태중 선생님 자료 — 2025 대입 교과전형 70%컷(어디가 공개) 기준 9등급 ↔ 5등급 역산표
+// 원자료는 (9등급,5등급) 쌍으로 대학별 컷을 정리한 것이라, 5등급 기준 오름차순으로 정렬해 사용
+const WOOSEONG_TABLE=(()=>{
+  const raw=[ // [9등급, 5등급]
+    [1.231159,1.06],[1.342754,1.10],[1.45,1.12],[1.55,1.14],[1.65,1.16],[1.759804,1.173038],[1.851739,1.23],[1.927304,1.33],
+    [2.032899,1.38],[2.143826,1.432],[2.228913,1.461667],[2.323907,1.528173],[2.40548,1.553065],[2.473001,1.621452],
+    [2.561304,1.685],[2.624493,1.69771],[2.764203,1.800522],[2.813043,1.839652],[2.903574,1.876505],[2.963588,1.89265],
+    [3.054741,1.913754],[3.143899,1.994041],[3.286095,2.022494],[3.387971,2.037894],[3.498696,2.121143],[3.60677,2.176199],
+    [3.677935,2.220804],[3.793283,2.289645],[3.90865,2.313918],[4.060142,2.428357],[4.193311,2.46584],[4.305217,2.489707],
+    [4.405342,2.558371],[4.526237,2.635611],[4.700472,2.750937],[4.854746,2.865025],[4.948604,2.923023],[5.084932,3.031015],
+    [5.229547,3.12941],[5.409315,3.239251],[5.58888,3.33409],[5.734641,3.466544],[5.887986,3.600919],[6.003475,3.605715],
+    [6.193867,3.73474],[6.305802,3.816481],[6.426844,3.885966],[6.547988,3.944343],[6.657107,4.042893],[6.815928,4.082067],
+    [6.942942,4.164862],[7.10098,4.220786],[7.335898,4.35317],[7.556016,4.462439],[7.657339,4.565097],[7.844235,4.589526],
+    [8.22,4.76],[8.669355,4.87129],
+    [6.71,4.1],[6.81,4.15],[6.91,4.17],[7.08,4.27],[7.12,4.31],[7.24,4.31],[7.32,4.33],[7.43,4.4],[7.54,4.46],[7.66,4.52],[7.7,4.56],
+  ];
+  const inv=raw.map(([g9,g5])=>[g5,g9]);
+  inv.push([1.00,1.00]); // 1등급 양끝 고정점 보정
+  inv.sort((a,b)=>a[0]-b[0]);
+  return inv;
+})();
+
+function interpTable(table,x){
+  if(x==null||isNaN(x)) return null;
+  if(x<=table[0][0]) return table[0][1];
+  if(x>=table[table.length-1][0]) return table[table.length-1][1];
+  for(let i=0;i<table.length-1;i++){
+    const [x1,y1]=table[i], [x2,y2]=table[i+1];
+    if(x>=x1&&x<=x2){
+      if(x2===x1) return y1;
+      return y1+(y2-y1)*(x-x1)/(x2-x1);
+    }
+  }
+  return null;
+}
+function toGrade9(g5){
+  if(g5==null) return null;
+  const table=state.grade9Source==='wooseong'?WOOSEONG_TABLE:DAEJIN_TABLE;
+  return interpTable(table,g5);
+}
+function g9Tag(g5){
+  const v=toGrade9(g5);
+  if(v==null) return '';
+  const srcLabel=state.grade9Source==='wooseong'?'김태중 선생님 자료(2025 대입 70%컷 역산)':'대진대학교 연구자료(2025, 전국 23개교 고3 6,087명)';
+  return`<span class="g9est" title="9등급 환산 추정치 · ${srcLabel} 기준">↳${v.toFixed(2)}</span>`;
+}
 
 // ─── 등급/성취도/원점수 분리 파일 파싱 (반별 블록 반복 구조) ──────
 function parseMultiBlockFileRows(raw){
@@ -806,9 +893,14 @@ function renderDashboard(){
   </div>
 
   <div class="card">
-    <div class="card-head"><h3>등급 분포도</h3></div>
+    <div class="card-head"><h3>등급 분포도</h3>
+      <div class="seg" id="seg-dist">
+        <button data-t="line" class="${state.distChartType==='line'?'on':''}">📈 선</button>
+        <button data-t="bar" class="${state.distChartType==='bar'?'on':''}">📊 막대</button>
+      </div>
+    </div>
     <div class="sub">${esc(sem.name)} · 1~9등급 인원 분포 (마우스를 올리면 과목별 인원 표시)</div>
-    <div class="chartbox">${renderDistChart(subjStats,'c-dist')}</div>
+    <div class="chartbox">${state.distChartType==='bar'?renderDistBarChart(subjStats,'c-dist'):renderDistChart(subjStats,'c-dist')}</div>
     <div class="legend" id="legend-dist">${subjStats.map((s,i)=>
       `<span class="lg"><span class="sw" style="background:${SEM_COLORS[i%SEM_COLORS.length]};border-radius:2px"></span>${esc(s.subj)}</span>`
     ).join('')}</div>
@@ -834,6 +926,12 @@ function renderDashboard(){
       document.getElementById('seg-subj').querySelectorAll('button').forEach(b=>b.classList.remove('on'));
       btn.classList.add('on');
       document.getElementById('subj-table-wrap').innerHTML=renderSubjTable(subjStats,btn.dataset.m);
+    };
+  });
+  document.getElementById('seg-dist').querySelectorAll('button').forEach(btn=>{
+    btn.onclick=()=>{
+      state.distChartType=btn.dataset.t;
+      renderDashboard();
     };
   });
 
@@ -937,6 +1035,49 @@ function renderDistChart(subjStats,id){
     const x=padL+i*xStep-xStep/2;
     svg+=`<rect x="${Math.max(0,x)}" y="${padT}" width="${xStep}" height="${H-padT-padB}"
                fill="transparent" data-gi="${i}" class="dist-hit" style="cursor:pointer"/>`;
+  });
+  svg+=`</svg><div class="tip" id="${id}-tip"></div>`;
+  return svg;
+}
+
+function renderDistBarChart(subjStats,id){
+  const grades=[1,2,3,4,5,6,7,8,9];
+  const n=subjStats.length||1;
+  const barGap=1.5, barW=Math.max(3,Math.min(9,60/n));
+  const groupW=n*barW+(n-1)*barGap;
+  const groupGap=14;
+  const padL=44,padR=16,padT=20,padB=30;
+  const W=Math.max(620,grades.length*(groupW+groupGap)+padL+padR);
+  const H=280;
+  const maxCnt=Math.max(...subjStats.flatMap(s=>s.dist),1);
+  const yScale=(H-padT-padB)/maxCnt;
+  const yTicks=[0,Math.ceil(maxCnt/4),Math.ceil(maxCnt/2),Math.ceil(maxCnt*3/4),maxCnt];
+
+  let svg=`<svg id="${id}" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;min-width:${W}px" data-max="${maxCnt}">`;
+  yTicks.forEach(v=>{
+    const y=H-padB-v*yScale;
+    svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#EEF1F6"/>
+          <text x="${padL-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#93A1B5">${v}</text>`;
+  });
+
+  grades.forEach((g,gi)=>{
+    const gx=padL+gi*(groupW+groupGap);
+    svg+=`<text x="${gx+groupW/2}" y="${H-2}" text-anchor="middle" font-size="11.5" fill="#5A6B82">${g}등급</text>`;
+    subjStats.forEach((s,si)=>{
+      const cnt=s.dist[gi]||0;
+      const color=SEM_COLORS[si%SEM_COLORS.length];
+      const bx=gx+si*(barW+barGap);
+      const bh=cnt*yScale;
+      const by=H-padB-bh;
+      svg+=`<rect x="${bx}" y="${by}" width="${barW}" height="${bh}" fill="${color}" opacity=".88"
+                 data-si="${si}" data-gi="${gi}" class="dist-bar"/>`;
+    });
+  });
+  // hover 영역 (기존 라인차트와 동일한 방식으로 그룹 단위 히트 영역 제공)
+  grades.forEach((g,gi)=>{
+    const gx=padL+gi*(groupW+groupGap)-groupGap/2;
+    svg+=`<rect x="${Math.max(0,gx)}" y="${padT}" width="${groupW+groupGap}" height="${H-padT-padB}"
+               fill="transparent" data-gi="${gi}" class="dist-hit" style="cursor:pointer"/>`;
   });
   svg+=`</svg><div class="tip" id="${id}-tip"></div>`;
   return svg;
@@ -1086,6 +1227,28 @@ function renderStudent(){
       renderStudent();
     };
   });
+  document.getElementById('seg-subjchart')?.querySelectorAll('button').forEach(btn=>{
+    btn.onclick=()=>{
+      state.subjChartType=btn.dataset.type;
+      renderStudent();
+    };
+  });
+  document.getElementById('seg-g9')?.querySelectorAll('button').forEach(btn=>{
+    btn.onclick=()=>{
+      state.grade9Source=btn.dataset.src;
+      renderStudent();
+    };
+  });
+  const exSubj=document.getElementById('printExSubjCharts');
+  if(exSubj) exSubj.onchange=e=>{
+    state.printExcludeSubjCharts=e.target.checked;
+    document.getElementById('sec-subj-charts')?.classList.toggle('print-hide',e.target.checked);
+  };
+  const exCombo=document.getElementById('printExComboChart');
+  if(exCombo) exCombo.onchange=e=>{
+    state.printExcludeComboChart=e.target.checked;
+    document.getElementById('sec-combo-chart')?.classList.toggle('print-hide',e.target.checked);
+  };
 }
 
 // ─── 교과 분류 매핑 ─────────────────────────────────────────
@@ -1189,6 +1352,50 @@ function renderSingleSemSubjChart(sem, semIdx){
     const ly=H-padB+13;
     svg+=`<text x="${x}" y="${ly}" text-anchor="end" font-size="8.5" fill="#5A6B82"
                transform="rotate(-38,${x},${ly})">${esc(r.과목)}</text>`;
+  });
+
+  svg+=`</svg>`;
+  return`<div class="scroll">${svg}</div>`;
+}
+
+function renderSingleSemSubjBarChart(sem, semIdx){
+  const recs=sem.records;
+  const isExam=sem.type==='exam'||recs.some(r=>r.가등급&&!r.석차등급);
+  const barColor=isExam?'#7030A0':SEM_COLORS[semIdx%SEM_COLORS.length];
+
+  if(!recs.length) return '<p class="muted" style="font-size:13px">데이터 없음</p>';
+
+  const barW=Math.max(26,Math.min(44,320/recs.length));
+  const barGap=10;
+  const W=Math.max(400,recs.length*(barW+barGap)+40);
+  const H=178; const padL=34,padR=12,padT=22,padB=58;
+  const baseY=H-padB;
+  const yScale=(baseY-padT)/8; // 1~9등급, 1등급이 위
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;min-width:${W}px">`;
+
+  for(let g=1;g<=9;g++){
+    const y=padT+(g-1)*yScale;
+    svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}"
+               stroke="${g%2===1?'#E5E9F0':'#F5F6F8'}" stroke-width="${g%2===1?1:0.5}"/>`;
+    if(g%2===1) svg+=`<text x="${padL-5}" y="${y+4}" text-anchor="end" font-size="9.5" fill="#93A1B5">${g}</text>`;
+  }
+
+  recs.forEach((r,i)=>{
+    const g=r.석차등급||r.가등급;
+    const isGa=!r.석차등급&&!!r.가등급;
+    const bx=padL+i*(barW+barGap)+barGap/2;
+    const cx=bx+barW/2;
+    const ly=H-padB+13;
+    svg+=`<text x="${cx}" y="${ly}" text-anchor="end" font-size="8.5" fill="#5A6B82"
+               transform="rotate(-38,${cx},${ly})">${esc(r.과목)}</text>`;
+    if(!g) return;
+    const topY=padT+(g-1)*yScale;
+    const h=baseY-topY;
+    svg+=`<rect x="${bx}" y="${topY}" width="${barW}" height="${h}" rx="3"
+               fill="${gradeHex(g)}" opacity="0.88" ${isExam?'stroke="#7030A0" stroke-width="1.5" stroke-dasharray="4,2"':''}/>
+          <text x="${cx}" y="${topY-6}" text-anchor="middle" font-size="9.5"
+                font-weight="800" fill="${isGa?'#7030A0':barColor}">${isGa?'(가)'+g:g}</text>`;
   });
 
   svg+=`</svg>`;
@@ -1520,7 +1727,7 @@ function renderStudentDetail(name,stuData,nameMap){
     const c국영수=combos.find(c=>c.key==='국영수')||{avgGrade:null};
     const avgS=avg(recs.filter(r=>r.원점수!=null).map(r=>r.원점수));
     const semColor=SEM_COLORS[si%SEM_COLORS.length];
-    function gb(c){return c.avgGrade?`<span class="avg-badge" style="background:${gradeHex(c.avgGrade)}66">${c.avgGrade.toFixed(2)}</span>`:'<span class="muted">–</span>';}
+    function gb(c){return c.avgGrade?`<span class="avg-badge" style="background:${gradeHex(c.avgGrade)}66">${c.avgGrade.toFixed(2)}</span>${g9Tag(c.avgGrade)}`:'<span class="muted">–</span>';}
     return`<tr>
       <td class="subj-name" style="color:${isExam?'#7030A0':'inherit'};font-weight:700;white-space:nowrap">
         <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${semColor};margin-right:6px;vertical-align:middle"></span>
@@ -1542,7 +1749,7 @@ function renderStudentDetail(name,stuData,nameMap){
     const c국영수사=allCombos.find(c=>c.key==='국영수사')||{avgGrade:null};
     const c국영수과=allCombos.find(c=>c.key==='국영수과')||{avgGrade:null};
     const c국영수=allCombos.find(c=>c.key==='국영수')||{avgGrade:null};
-    function gb(c){return c.avgGrade?`<span class="avg-badge" style="background:${gradeHex(c.avgGrade)}">${c.avgGrade.toFixed(2)}</span>`:'<span class="muted">–</span>';}
+    function gb(c){return c.avgGrade?`<span class="avg-badge" style="background:${gradeHex(c.avgGrade)}">${c.avgGrade.toFixed(2)}</span>${g9Tag(c.avgGrade)}`:'<span class="muted">–</span>';}
     return`<tr style="background:#FFF7E0;font-weight:800">
       <td class="subj-name" style="white-space:nowrap">
         <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#333;margin-right:6px;vertical-align:middle"></span>
@@ -1568,11 +1775,11 @@ function renderStudentDetail(name,stuData,nameMap){
       const g=combo?.avgGrade;
       const isExam=s.type==='exam'||s.records.some(r=>r.가등급&&!r.석차등급);
       return`<td><span class="avg-badge" style="background:${g?gradeHex(g)+(isExam?'88':'66'):'#f5f5f5'};${isExam&&g?'outline:1.5px solid #7030A0;outline-offset:-1px':''}">
-        ${g?g.toFixed(2):'–'}</span></td>`;
+        ${g?g.toFixed(2):'–'}</span>${g9Tag(g)}</td>`;
     }).join('');
     const allG=allCombos.find(x=>x.key===c.key)?.avgGrade;
     const allCell=`<td style="background:#FFF7E0"><span class="avg-badge" style="background:${allG?gradeHex(allG):'#f5f5f5'};font-weight:800">
-      ${allG?allG.toFixed(2):'–'}</span></td>`;
+      ${allG?allG.toFixed(2):'–'}</span>${g9Tag(allG)}</td>`;
     return`<tr><td class="subj-name" style="font-weight:700">${esc(c.label)}</td>${cells}${allCell}</tr>`;
   }).join('');
 
@@ -1591,12 +1798,12 @@ function renderStudentDetail(name,stuData,nameMap){
         <td class="cell-num">${r.과목평균??'–'}</td>
         <td style="color:${diff==null?'inherit':diff>=0?'#2E9E5B':'#F8696B'};font-weight:600">${diffStr||'–'}</td>
         <td><span class="achv" style="background:${achvHex(r.성취도)}">${r.성취도||'–'}</span></td>
-        <td>${g?`<span class="gchip" style="background:${GRADE_HEX[g]}">${g}등급</span>`
+        <td>${g?`<span class="gchip" style="background:${GRADE_HEX[g]}">${g}등급</span>${g9Tag(g)}`
            :r.가등급?`<span class="gchip" style="background:${GRADE_HEX[r.가등급]};color:#7030A0;outline:2px solid #7030A0;outline-offset:-2px">(가)${r.가등급}등급</span>`:'–'}</td>
         <td class="muted">${r.가등급&&r.전교등수?`${r.전교등수}/${r.전교수강자||'?'}`:r.수강자수||'–'}</td>
       </tr>`;
     }).join('');
-    return`<div style="margin-top:20px">
+    return`<div class="print-block" style="margin-top:20px">
       <div style="font-weight:800;margin-bottom:8px;font-size:14px;display:flex;align-items:center;gap:8px">
         <span style="width:12px;height:12px;border-radius:50%;background:${semColor};display:inline-block"></span>
         <span style="color:${isExam?'#7030A0':'var(--navy)'}">${esc(s.semName)}</span>
@@ -1610,8 +1817,28 @@ function renderStudentDetail(name,stuData,nameMap){
   }).join('');
 
   return`
+  <!-- 9등급 환산 기준 -->
+  <div class="no-print" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;background:#FFF8EF;border:1px dashed #E8C896;border-radius:10px;padding:8px 14px;margin:14px 0 0;font-size:12.5px;color:var(--txt2)">
+    <span style="font-weight:700">↳ 9등급 환산 기준 (↳로 표시되는 추정치, 둘 다 참고용 추정치입니다)</span>
+    <div class="seg-sm" id="seg-g9">
+      <button data-src="daejin" class="${state.grade9Source==='daejin'?'on':''}">대진대</button>
+      <button data-src="wooseong" class="${state.grade9Source==='wooseong'?'on':''}">김태중샘</button>
+    </div>
+  </div>
+
+  <!-- 인쇄 옵션 -->
+  <div class="no-print" style="display:flex;gap:16px;flex-wrap:wrap;align-items:center;background:#F5F7FB;border:1px dashed var(--line);border-radius:10px;padding:8px 14px;margin:10px 0 0;font-size:12.5px;color:var(--txt2)">
+    <span style="font-weight:700">🖨 인쇄 옵션 (페이지 수 줄이기)</span>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="checkbox" id="printExSubjCharts" ${state.printExcludeSubjCharts?'checked':''}> 학기별 과목 그래프 제외
+    </label>
+    <label style="display:flex;align-items:center;gap:5px;cursor:pointer">
+      <input type="checkbox" id="printExComboChart" ${state.printExcludeComboChart?'checked':''}> 교과조합 추이 차트 제외
+    </label>
+  </div>
+
   <!-- 학기별 요약 -->
-  <div style="margin:16px 0 0">
+  <div class="print-block" style="margin:16px 0 0">
     <div style="font-weight:800;color:var(--navy);font-size:14px;margin-bottom:8px">📋 학기별 요약</div>
     <div class="scroll">
       <table><thead><tr>
@@ -1622,9 +1849,15 @@ function renderStudentDetail(name,stuData,nameMap){
   </div>
 
   <!-- 학기별 과목 그래프 -->
-  <div style="margin-top:22px">
-    <div style="font-weight:800;color:var(--navy);font-size:14px;margin-bottom:4px">📊 학기별 과목 석차등급</div>
-    <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">보라색 점선 = 가등급 · 화면이 넓으면 학기가 나란히 표시됩니다</div>
+  <div id="sec-subj-charts" class="print-block ${state.printExcludeSubjCharts?'print-hide':''}" style="margin-top:22px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+      <div style="font-weight:800;color:var(--navy);font-size:14px">📊 학기별 과목 석차등급</div>
+      <div class="no-print seg-sm" id="seg-subjchart">
+        <button data-type="line" class="${state.subjChartType==='line'?'on':''}">📈 선</button>
+        <button data-type="bar" class="${state.subjChartType==='bar'?'on':''}">📊 막대</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">보라색 점선/테두리 = 가등급 · 화면이 넓으면 학기가 나란히 표시됩니다</div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
     ${stuData.map((s,si)=>{
       const isExam=s.type==='exam'||s.records.some(r=>r.가등급&&!r.석차등급);
@@ -1635,17 +1868,17 @@ function renderStudentDetail(name,stuData,nameMap){
           <span style="color:${isExam?'#7030A0':'var(--navy)'}">${esc(s.semName)}</span>
           ${isExam?'<span style="font-size:11px;background:#F3E5F5;color:#7030A0;padding:2px 8px;border-radius:6px">가등급</span>':''}
         </div>
-        ${renderSingleSemSubjChart(s,si)}
+        ${state.subjChartType==='bar'?renderSingleSemSubjBarChart(s,si):renderSingleSemSubjChart(s,si)}
       </div>`;
     }).join('')}
     </div>
   </div>
 
   <!-- 교과조합 추이 차트 -->
-  <div style="margin-top:22px">
+  <div id="sec-combo-chart" class="print-block ${state.printExcludeComboChart?'print-hide':''}" style="margin-top:22px">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">
       <div style="font-weight:800;color:var(--navy);font-size:14px">📈 교과조합별 학기별 추이</div>
-      <div style="display:flex;gap:4px;background:#EEF1F6;border-radius:8px;padding:3px">
+      <div class="no-print" style="display:flex;gap:4px;background:#EEF1F6;border-radius:8px;padding:3px">
         <button class="combo-chart-toggle" data-type="line" style="border:none;background:${state.comboChartType==='line'?'#fff':'transparent'};
           box-shadow:${state.comboChartType==='line'?'0 1px 3px rgba(0,0,0,.12)':'none'};color:${state.comboChartType==='line'?'var(--navy)':'#8A97AB'};
           font-weight:700;font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer">📈 선 그래프</button>
@@ -1659,7 +1892,7 @@ function renderStudentDetail(name,stuData,nameMap){
   </div>
 
   <!-- 교과조합 상세 표 -->
-  <div style="margin-top:22px">
+  <div class="print-block" style="margin-top:22px">
     <div style="font-weight:800;color:var(--navy);font-size:14px;margin-bottom:8px">🔢 교과조합별 평균 등급</div>
     <div class="scroll">
       <table><thead><tr><th class="subj-name">교과조합</th>${comboHdr}</tr></thead>
@@ -1736,7 +1969,25 @@ function renderClass(){
 }
 
 // ─── 칩 렌더링 ───────────────────────────────────────────────
+// ─── 브라우저 자동 저장 (이 컴퓨터의 브라우저에만 저장, 서버 전송 없음) ───
+const LS_KEY='naeshin_autosave_v1';
+function autoSave(){
+  try{
+    if(!state.semesters.length){localStorage.removeItem(LS_KEY);return;}
+    localStorage.setItem(LS_KEY,JSON.stringify({semesters:state.semesters,savedAt:Date.now()}));
+  }catch(e){
+    if(!autoSave._warned){autoSave._warned=true;toast('⚠️ 브라우저 자동 저장 공간이 부족해 저장하지 못했습니다.');}
+  }
+}
+function autoLoad(){
+  try{
+    const o=JSON.parse(localStorage.getItem(LS_KEY)||'null');
+    return o&&o.semesters&&o.semesters.length?o:null;
+  }catch(e){return null;}
+}
+
 function renderChips(){
+  autoSave();
   const el=document.getElementById('chips');
   if(!state.semesters.length){
     el.innerHTML=`<span class="muted" style="font-size:13px">아직 업로드된 데이터가 없습니다.</span>`;
@@ -2065,6 +2316,13 @@ document.getElementById('threeAdd').onclick=async()=>{
   }
 };
 
+document.getElementById('btnClearSaved').onclick=()=>{
+  if(!confirm('이 브라우저에 자동 저장된 성적과 현재 화면의 성적을 모두 삭제할까요?\n(엑셀 원본 파일은 영향이 없습니다)')) return;
+  state.semesters=[];state.selSem=null;state.selBan=null;state.selStudent=null;
+  try{localStorage.removeItem(LS_KEY);}catch(e){}
+  renderChips();render();toast('🗑 저장된 성적을 삭제했습니다.');
+};
+
 // ─── 저장 ────────────────────────────────────────────────────
 document.getElementById('btnSave').onclick=()=>{
   const data=JSON.stringify({semesters:state.semesters});
@@ -2096,6 +2354,15 @@ function toast(m){
       state.selSem=saved.semesters[saved.semesters.length-1].id;
     }
   }catch(e){}
+  if(!state.semesters.length){
+    const o=autoLoad();
+    if(o){
+      state.semesters=o.semesters;
+      state.selSem=o.semesters[o.semesters.length-1].id;
+      const d=new Date(o.savedAt||Date.now());
+      setTimeout(()=>toast(`💾 이 브라우저에 저장된 성적을 불러왔습니다 (${d.getMonth()+1}/${d.getDate()} 저장)`),300);
+    }
+  }
   renderChips();
   render();
 })();

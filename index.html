@@ -1,0 +1,2104 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>내신 성적 누적 분석</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@latest/dist/web/static/pretendard.css">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{
+  --navy:#1F3864;--blue:#2E74B5;--lblue:#E8F0FA;
+  --bg:#F4F6FB;--card:#FFF;--line:#E5E9F0;--line2:#EEF1F6;
+  --txt:#1E2A3A;--txt2:#5A6B82;--txt3:#93A1B5;
+  --g1:#63BE7B;--g3:#A8D07E;--g5:#FFEB84;--g7:#FCA371;--g9:#F8696B;
+  --ga1:#63BE7B;--ga2:#A8D07E;--ga3:#FFEB84;--ga4:#FDC57B;--ga5:#F8696B;
+  --radius:16px;--shadow:0 1px 2px rgba(31,56,100,.04),0 6px 24px rgba(31,56,100,.06);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Pretendard',-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+     background:var(--bg);color:var(--txt);line-height:1.5;-webkit-font-smoothing:antialiased;
+     font-feature-settings:"tnum"}
+.wrap{max-width:1240px;margin:0 auto;padding:28px 24px 80px}
+
+/* 상단 바 */
+.topbar{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+        padding:24px 28px;box-shadow:var(--shadow);display:flex;align-items:flex-start;
+        justify-content:space-between;gap:20px;flex-wrap:wrap}
+.title-wrap h1{font-size:24px;font-weight:800;color:var(--navy);display:flex;align-items:center;gap:9px}
+.title-wrap p{color:var(--txt2);font-size:14px;margin-top:6px}
+.top-actions{display:flex;gap:10px;flex-wrap:wrap}
+
+/* 학기 칩 */
+.sembar{margin-top:18px;background:var(--card);border:1px solid var(--line);
+        border-radius:var(--radius);padding:16px 20px;box-shadow:var(--shadow)}
+.sembar .lbl{font-size:12px;font-weight:700;color:var(--txt3);letter-spacing:.04em;margin-bottom:10px}
+.chips{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:7px;background:#F7F9FD;border:1px solid var(--line);
+      border-radius:999px;padding:7px 7px 7px 14px;font-size:13px;font-weight:600;color:var(--txt2);
+      cursor:pointer;transition:.15s}
+.chip:hover{border-color:var(--blue)}
+.chip.active{background:var(--blue);color:#fff;border-color:var(--blue)}
+.chip .x{width:19px;height:19px;border-radius:50%;background:rgba(0,0,0,.07);display:grid;
+          place-items:center;font-size:12px}
+.chip.active .x{background:rgba(255,255,255,.25)}
+.chip .x:hover{background:#F8696B;color:#fff}
+.chip-sem{display:inline-block;font-size:11px;font-weight:700;opacity:.75;
+          background:rgba(0,0,0,.06);padding:1px 7px;border-radius:6px}
+.chip.active .chip-sem{background:rgba(255,255,255,.22);opacity:1}
+
+/* 탭 */
+.tabs{display:flex;gap:26px;margin:22px 4px 0;border-bottom:1px solid var(--line)}
+.tab{background:none;border:none;cursor:pointer;font-family:inherit;font-size:15px;font-weight:700;
+     color:var(--txt3);padding:12px 2px 14px;position:relative;display:flex;align-items:center;gap:7px}
+.tab.active{color:var(--blue)}
+.tab.active::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2.5px;
+                   background:var(--blue);border-radius:2px}
+
+/* 그리드·카드 */
+.grid{display:grid;gap:18px;margin-top:20px}
+.g2{grid-template-columns:1fr 1fr}
+.g3{grid-template-columns:1fr 1fr 1fr}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+      padding:24px;box-shadow:var(--shadow)}
+.card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;
+           margin-bottom:4px;flex-wrap:wrap}
+.card h3{font-size:16px;font-weight:800;color:var(--navy)}
+.card .sub{font-size:12.5px;color:var(--txt3);margin-bottom:16px}
+
+/* 숫자 stat */
+.stat{display:flex;align-items:center;gap:18px}
+.stat .ic{width:58px;height:58px;border-radius:15px;display:grid;place-items:center;font-size:25px}
+.stat .ic.b{background:var(--lblue);color:var(--blue)}
+.stat .ic.g{background:#E3F3EA;color:#2E9E5B}
+.stat .ic.o{background:#FFF3E0;color:#E65100}
+.stat .ic.p{background:#F3E5F5;color:#7B1FA2}
+.stat .ln{font-size:13px;color:var(--txt2);font-weight:600}
+.stat .big{font-size:28px;font-weight:800;color:var(--navy)}
+
+/* 테이블 */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 8px;text-align:center}
+thead th{color:var(--txt2);font-weight:700;font-size:12px;border-bottom:2px solid var(--line)}
+tbody td{border-bottom:1px solid var(--line2)}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover td{background:#F7F9FD}
+.subj-name{text-align:left;font-weight:700;color:var(--txt);white-space:nowrap}
+.subj-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:7px;vertical-align:middle}
+.cell-num{font-weight:600;color:var(--txt)}
+.muted{color:var(--txt3)}
+.gchip{display:inline-block;min-width:22px;padding:2px 6px;border-radius:6px;font-weight:800;font-size:12px;color:#3a3a3a}
+.avg-badge{display:inline-block;padding:3px 10px;border-radius:8px;font-weight:800;color:#3a3a3a}
+.achv{display:inline-block;min-width:26px;padding:2px 6px;border-radius:6px;font-weight:800;font-size:12px}
+
+/* 버튼 */
+.btn{border:none;cursor:pointer;font-family:inherit;font-weight:700;font-size:14px;
+     border-radius:11px;padding:11px 18px;display:inline-flex;align-items:center;gap:8px;transition:.15s}
+.btn-primary{background:var(--blue);color:#fff}.btn-primary:hover{background:#2566a3}
+.btn-dark{background:var(--navy);color:#fff}.btn-dark:hover{background:#16284a}
+.btn-ghost{background:#fff;color:var(--txt2);border:1px solid var(--line)}
+.btn-ghost:hover{border-color:var(--blue);color:var(--blue)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+/* 세그먼트 컨트롤 */
+.seg{display:inline-flex;background:#F1F4F9;border-radius:10px;padding:3px;gap:3px}
+.seg button{border:none;background:none;font-family:inherit;font-size:13px;font-weight:700;
+            color:var(--txt2);padding:6px 14px;border-radius:8px;cursor:pointer;transition:.12s}
+.seg button.on{background:#fff;color:var(--blue);box-shadow:0 1px 3px rgba(0,0,0,.09)}
+
+/* select */
+select,input[type=text]{font-family:inherit;font-size:14px;padding:10px 13px;
+  border:1px solid var(--line);border-radius:10px;background:#fff;color:var(--txt);outline:none}
+select:focus,input:focus{border-color:var(--blue)}
+
+/* 힌트 */
+.hint{color:var(--txt3);font-size:13px;padding:40px 0;text-align:center}
+
+/* 업로드 영역 */
+.upload-zone{border:2px dashed var(--line);border-radius:var(--radius);padding:40px;text-align:center;
+             transition:.15s;cursor:pointer}
+.upload-zone:hover,.upload-zone.over{border-color:var(--blue);background:var(--lblue)}
+.upload-zone .icon{font-size:40px;margin-bottom:12px}
+.upload-zone p{color:var(--txt2);font-size:14px;font-weight:600}
+.upload-zone small{color:var(--txt3);font-size:12px}
+
+/* 파일 아이템 */
+.fitem{display:flex;align-items:center;gap:10px;justify-content:space-between;
+       background:#F7F9FD;border:1px solid var(--line);border-radius:10px;
+       padding:10px 14px;margin-top:8px;font-size:13px}
+.fitem .fn{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--txt2);font-weight:600}
+.fitem .sem-tag{background:var(--blue);color:#fff;font-size:11px;font-weight:700;
+                padding:2px 9px;border-radius:6px;white-space:nowrap}
+.fitem .rm{cursor:pointer;color:var(--txt3);font-weight:700;padding:2px 8px;border-radius:6px}
+.fitem .rm:hover{background:#FCE4D6;color:#F8696B}
+
+/* 모달 */
+.ov{position:fixed;inset:0;background:rgba(20,30,50,.45);display:none;align-items:center;
+    justify-content:center;z-index:50;padding:20px}
+.ov.show{display:flex}
+.modal{background:#fff;border-radius:18px;padding:28px;width:500px;max-width:100%;
+       box-shadow:0 20px 60px rgba(0,0,0,.25);max-height:90vh;overflow:auto}
+.modal h3{font-size:18px;font-weight:800;color:var(--navy);margin-bottom:6px}
+.modal p{font-size:13px;color:var(--txt2);margin-bottom:16px}
+.modal label{display:block;font-size:12px;font-weight:700;color:var(--txt2);margin:14px 0 6px}
+.modal input[type=text]{width:100%}
+.modal .row{display:flex;gap:10px;justify-content:flex-end;margin-top:24px}
+
+/* 토스트 */
+.toast{position:fixed;bottom:26px;left:50%;transform:translateX(-50%) translateY(20px);
+       background:var(--navy);color:#fff;padding:13px 22px;border-radius:12px;font-weight:700;
+       font-size:14px;opacity:0;pointer-events:none;transition:.3s;z-index:60}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* 학생 조회 */
+.pick{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+.stu-head{display:flex;align-items:baseline;gap:12px;margin-bottom:4px}
+.stu-head .nm{font-size:22px;font-weight:800;color:var(--navy)}
+.stu-head .meta{font-size:13px;color:var(--txt2);font-weight:600}
+
+/* SVG 차트 */
+.chartbox{position:relative}
+.tip{position:absolute;display:none;background:#fff;border:1px solid var(--line);
+     box-shadow:0 6px 20px rgba(31,56,100,.14);border-radius:10px;padding:9px 12px;
+     font-size:12px;pointer-events:none;z-index:5;min-width:130px}
+.tip .th{font-weight:800;color:var(--navy);margin-bottom:6px;font-size:13px}
+.tip .tr{display:flex;align-items:center;gap:7px;color:var(--txt2);font-weight:600;margin:3px 0}
+.tip .tr .sw{width:10px;height:10px;border-radius:3px}
+.tip .tr b{margin-left:auto;color:var(--txt);font-weight:800}
+
+.legend{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-top:14px;font-size:12px;color:var(--txt3)}
+.legend .lg{display:inline-flex;align-items:center;gap:6px}
+.legend .sw{width:13px;height:13px;border-radius:4px}
+.scroll{overflow-x:auto}
+
+/* 인쇄 */
+@media print{
+  body{background:#fff;font-size:11pt}
+  .topbar .top-actions,.tabs,.sembar,.ov,.toast,.no-print{display:none!important}
+  .wrap{max-width:100%;padding:10px}
+  .card{break-inside:avoid;box-shadow:none;border:1px solid #ddd;page-break-inside:avoid}
+  .grid{gap:12px}
+  @page{margin:1.5cm}
+}
+@media(max-width:760px){.g2,.g3,.g4{grid-template-columns:1fr}.wrap{padding:16px 12px 60px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 상단 -->
+  <div class="topbar">
+    <div class="title-wrap">
+      <h1>📚 내신 성적 누적 분석</h1>
+      <p>나이스 교과학습발달상황 엑셀 파일을 업로드하면 학기별 성적 추이와 등급 분포를 분석합니다.</p>
+    </div>
+    <div class="top-actions no-print">
+      <button class="btn btn-primary" id="btnUpload">⊕ 나이스 데이터 업로드</button>
+      <button class="btn" style="background:#2E9E5B;color:#fff" id="btnThree">📑 등급·성취도·원점수 업로드</button>
+      <button class="btn" style="background:#7030A0;color:#fff" id="btnExam">📝 시험 성적 → 가등급</button>
+      <button class="btn btn-dark" id="btnSave">⤓ HTML 저장</button>
+      <button class="btn btn-ghost" onclick="window.print()">🖨 인쇄</button>
+    </div>
+  </div>
+
+  <!-- 학기 칩 -->
+  <div class="sembar">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div class="lbl" style="margin:0">등록된 학기</div>
+      <button class="btn btn-ghost no-print" id="btnMergeDup" style="font-size:12px;padding:5px 12px;display:none">
+        🔧 중복 학기 정리
+      </button>
+    </div>
+    <div class="chips" id="chips"><span class="muted" style="font-size:13px">아직 업로드된 데이터가 없습니다.</span></div>
+  </div>
+
+  <!-- 탭 -->
+  <div class="tabs no-print">
+    <button class="tab active" data-tab="dashboard">📊 대시보드</button>
+    <button class="tab" data-tab="student">👤 학생 성적 조회</button>
+  </div>
+
+  <div id="view"></div>
+</div>
+
+<!-- 업로드 모달 -->
+<div class="ov" id="modal">
+  <div class="modal">
+    <h3>📁 나이스 파일 업로드</h3>
+    <p>나이스 → 학교생활기록부 → <b>교과학습발달상황</b> 엑셀 파일을 선택하세요.<br>
+       반별 파일을 여러 개 동시에 올릴 수 있습니다.<br>
+       한 파일에 여러 학년(1학년~현재)의 누적 성적이 들어있어도 <b>학년·학기가 자동으로 인식되어 분리</b>됩니다.</p>
+    <div class="upload-zone" id="dropZone">
+      <div class="icon">📂</div>
+      <p>파일을 끌어다 놓거나 클릭하여 선택</p>
+      <small>.xlsx, .xls 파일만 가능합니다</small>
+    </div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" multiple style="display:none">
+    <div id="fileList"></div>
+    <label>학기 이름 (선택사항 — 비워두면 "1학년 1학기"처럼 자동으로 인식됩니다)</label>
+    <input type="text" id="semName" placeholder="자동 인식되지 않을 때만 입력" style="width:100%">
+    <label>학년도</label>
+    <input type="text" id="semYear" placeholder="예: 2026" style="width:100%">
+    <div class="row">
+      <button class="btn btn-ghost" id="mCancel">취소</button>
+      <button class="btn btn-primary" id="mAdd">추가하기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 가등급 모달 -->
+<div class="ov" id="examModal">
+  <div class="modal" style="width:560px">
+    <h3>📝 정기고사 성적 → 가등급 계산</h3>
+    <p>나이스 <b>전과목 성적 일람표</b> 엑셀 파일을 업로드하면<br>
+       전교생 기준 Z점수로 <b>5등급 가등급</b>을 자동 계산하여 새 학기로 추가합니다.</p>
+    <div class="upload-zone" id="examDropZone">
+      <div class="icon">📊</div>
+      <p>전과목 성적 일람표 엑셀 파일 선택</p>
+      <small>나이스 → 성적처리 → 전과목 성적 일람표 → 엑셀 저장</small>
+    </div>
+    <input type="file" id="examFileInput" accept=".xlsx,.xls" style="display:none">
+    <div id="examFileShow" style="margin-top:8px"></div>
+    <label>학기 이름 (예: 2학년 1학기 1차)</label>
+    <input type="text" id="examSemName" placeholder="예: 2학년 1학기 1차 정기고사" style="width:100%">
+    <div style="margin-top:14px;background:#F7F9FD;border:1px solid var(--line);border-radius:10px;padding:12px 14px">
+      <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:8px">📐 가등급 기준 (5등급제)</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px">
+        <span style="background:#63BE7B;padding:3px 10px;border-radius:6px;font-weight:700">1등급 ≤ 상위 10%</span>
+        <span style="background:#A8D07E;padding:3px 10px;border-radius:6px;font-weight:700">2등급 ≤ 상위 34%</span>
+        <span style="background:#FFEB84;padding:3px 10px;border-radius:6px;font-weight:700">3등급 ≤ 상위 66%</span>
+        <span style="background:#FDC57B;padding:3px 10px;border-radius:6px;font-weight:700">4등급 ≤ 상위 90%</span>
+        <span style="background:#F8696B;padding:3px 10px;border-radius:6px;font-weight:700;color:#fff">5등급 그 외</span>
+      </div>
+    </div>
+    <div id="examParseResult" style="margin-top:10px;font-size:13px;color:var(--txt2)"></div>
+    <div class="row">
+      <button class="btn btn-ghost" id="examCancel">취소</button>
+      <button class="btn" style="background:#7030A0;color:#fff" id="examAdd">가등급 계산 후 추가</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- 등급·성취도·원점수 3파일 모달 -->
+<div class="ov" id="threeModal">
+  <div class="modal" style="width:560px">
+    <h3>📑 등급 · 성취도 · 원점수 분리 파일 업로드</h3>
+    <p>반별 블록이 반복되는 형태의 <b>등급표 / 성취도표 / 원점수표</b> 3개 엑셀 파일을 각각 선택하세요.<br>
+       나이스 파일과 학기 이름이 같으면 자동으로 같은 학기에 합쳐집니다.</p>
+
+    <label>① 등급 성적표</label>
+    <div style="display:flex;gap:10px;align-items:center">
+      <input type="text" id="threeGradeShow" readonly placeholder="파일을 선택하세요" style="flex:1">
+      <button class="btn btn-ghost" id="threeGradeBtn" style="width:auto;padding:8px 16px">선택</button>
+    </div>
+    <input type="file" id="threeGradeInput" accept=".xlsx,.xls" style="display:none">
+
+    <label style="margin-top:10px">② 성취도 성적표</label>
+    <div style="display:flex;gap:10px;align-items:center">
+      <input type="text" id="threeAchvShow" readonly placeholder="파일을 선택하세요" style="flex:1">
+      <button class="btn btn-ghost" id="threeAchvBtn" style="width:auto;padding:8px 16px">선택</button>
+    </div>
+    <input type="file" id="threeAchvInput" accept=".xlsx,.xls" style="display:none">
+
+    <label style="margin-top:10px">③ 원점수 성적표</label>
+    <div style="display:flex;gap:10px;align-items:center">
+      <input type="text" id="threeScoreShow" readonly placeholder="파일을 선택하세요" style="flex:1">
+      <button class="btn btn-ghost" id="threeScoreBtn" style="width:auto;padding:8px 16px">선택</button>
+    </div>
+    <input type="file" id="threeScoreInput" accept=".xlsx,.xls" style="display:none">
+
+    <label style="margin-top:10px">학기 이름 (예: 2학년 1학기)</label>
+    <input type="text" id="threeSemName" placeholder="예: 2학년 1학기" style="width:100%">
+
+    <div id="threeParseResult" style="margin-top:10px;font-size:13px;color:var(--txt2)"></div>
+
+    <div class="row">
+      <button class="btn btn-ghost" id="threeCancel">취소</button>
+      <button class="btn" style="background:#2E9E5B;color:#fff" id="threeAdd">추가하기</button>
+    </div>
+  </div>
+</div>
+
+<script type="application/json" id="saved-data">{"semesters":[]}</script>
+
+<script>
+"use strict";
+
+// ─── 색상 ───────────────────────────────────────────────────
+const GRADE_HEX={1:'#63BE7B',2:'#85C87C',3:'#A8D07E',4:'#CBDC80',5:'#FFEB84',
+                 6:'#FDC57B',7:'#FCA371',8:'#FB8168',9:'#F8696B'};
+const ACHV_HEX={A:'#63BE7B',B:'#CBDC80',C:'#FFEB84',D:'#FDC57B',E:'#F8696B'};
+const SEM_COLORS=['#2E74B5','#C45911','#00B050','#FF0000','#7030A0','#843C0C'];
+
+function gradeHex(g){return GRADE_HEX[Math.round(g)]||'#FFEB84';}
+function achvHex(a){return ACHV_HEX[a]||'#F5F5F5';}
+function uid(){return 's'+Math.random().toString(36).slice(2,9);}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// ─── 상태 ────────────────────────────────────────────────────
+const state={
+  semesters:[], // [{id, name, year, students:[{번호,이름,반,records:[{교과,과목,학점,원점수,과목평균,성취도,석차등급,수강자수}]}]}]
+  tab:'dashboard',
+  selSem:null,   // 대시보드 선택 학기
+  selBan:null,
+  selStudent:null,
+  comboChartType:'line', // 교과조합 추이 차트: 'line' | 'bar'
+};
+
+// ─── 등급/성취도/원점수 분리 파일 파싱 (반별 블록 반복 구조) ──────
+function parseMultiBlockFileRows(raw){
+  // raw = XLSX.utils.sheet_to_json(ws,{header:1,defval:''})
+  const headerRows=[];
+  for(let i=0;i<raw.length;i++){
+    const row=raw[i]||[];
+    if(String(row[0]||'').trim()==='반' && String(row[2]||'').trim()==='성명') headerRows.push(i);
+  }
+  const allData={}, nameMap={};
+  for(let hi=0; hi<headerRows.length; hi++){
+    const hIdx=headerRows[hi];
+    const nextH=hi+1<headerRows.length?headerRows[hi+1]:raw.length;
+    const hrow=raw[hIdx]||[];
+    const subjCols={}; // ci -> {name, credit}
+    for(let ci=0; ci<hrow.length; ci++){
+      const h=hrow[ci];
+      const hs=String(h==null?'':h).trim();
+      if(hs && hs.includes('(')){
+        const nm=hs.split('(')[0].trim();
+        if(nm==='총점'||nm==='평균') continue;
+        const m=hs.match(/\(([^)]+)\)/);
+        const cr=m?parseInt(m[1])||0:0;
+        subjCols[ci]={name:nm, credit:cr};
+      }
+    }
+    let curBan=null;
+    for(let ri=hIdx+1; ri<nextH; ri++){
+      const row=raw[ri]||[];
+      const bv=row[0], nv=row[1], namev=row[2];
+      const sv=String(namev==null?'':namev).trim();
+      if(['총점','평균','','nan'].includes(sv)) continue;
+      const bvs=String(bv==null?'':bv).trim();
+      if(bvs.includes('위탁')) continue;
+      const bn=parseInt(bvs);
+      if(!isNaN(bn)) curBan=bn;
+      const num=parseInt(String(nv==null?'':nv).trim());
+      if(isNaN(num)) continue;
+      const key=curBan+'_'+num;
+      if(!allData[key]){allData[key]={}; nameMap[key]=sv;}
+      for(const ci in subjCols){
+        const {name:sn, credit:cr}=subjCols[ci];
+        const val=row[ci];
+        const vs=String(val==null?'':val).trim();
+        if(vs!==''&&vs!=='nan') allData[key][sn]={val:vs, credit:cr};
+      }
+    }
+  }
+  return {allData, nameMap};
+}
+
+function parseThreeFilesRows(gRaw, aRaw, sRaw){
+  const {allData:gData, nameMap}=parseMultiBlockFileRows(gRaw);
+  const {allData:aData}=parseMultiBlockFileRows(aRaw);
+  const {allData:sData}=parseMultiBlockFileRows(sRaw);
+
+  const allSubjs={}; // name -> credit
+  for(const key in gData){
+    for(const sn in gData[key]){
+      if(!(sn in allSubjs)) allSubjs[sn]=gData[key][sn].credit;
+    }
+  }
+  const subjTotal={};
+  for(const sn in allSubjs){
+    subjTotal[sn]=Object.values(gData).filter(d=>sn in d).length;
+  }
+  const subjScores={};
+  for(const sn in allSubjs) subjScores[sn]=[];
+  for(const key in sData){
+    for(const sn in sData[key]){
+      const v=parseFloat(sData[key][sn].val);
+      if(!isNaN(v) && sn in subjScores) subjScores[sn].push(v);
+    }
+  }
+  const subjAvg={};
+  for(const sn in subjScores){
+    const arr=subjScores[sn];
+    subjAvg[sn]=arr.length?Math.round((arr.reduce((a,b)=>a+b,0)/arr.length)*100)/100:null;
+  }
+
+  const stuMap={};
+  const keys=Object.keys(gData).sort((k1,k2)=>{
+    const [b1,n1]=k1.split('_').map(Number), [b2,n2]=k2.split('_').map(Number);
+    return b1-b2||n1-n2;
+  });
+  for(const key of keys){
+    const [ban,num]=key.split('_').map(Number);
+    const name=nameMap[key]||'';
+    if(!stuMap[key]) stuMap[key]={번호:num, 이름:name, 반:ban+'반', records:[]};
+    for(const sn in allSubjs){
+      if(!(sn in gData[key])) continue;
+      const gradeRaw=gData[key][sn].val;
+      const grade=parseInt(parseFloat(gradeRaw));
+      const achvVal=(aData[key]&&aData[key][sn])?String(aData[key][sn].val).trim():'';
+      const scoreVal=(sData[key]&&sData[key][sn])?parseFloat(sData[key][sn].val):null;
+      stuMap[key].records.push({
+        교과:getEduCat(sn), 과목:sn, 학점:allSubjs[sn]||0,
+        원점수:isNaN(scoreVal)?null:scoreVal,
+        과목평균:subjAvg[sn]!=null?subjAvg[sn]:null,
+        성취도:achvVal, 석차등급:isNaN(grade)?null:grade,
+        수강자수:subjTotal[sn]||null,
+      });
+    }
+  }
+  return {students:Object.values(stuMap)};
+}
+
+// ─── 나이스 파싱 ─────────────────────────────────────────────
+function parseNaisWorkbook(wb){
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+
+  let school='', classInfo='';
+  for(let i=0;i<6;i++){
+    const row=raw[i]||[];
+    for(const v of row){
+      const vs=String(v).trim();
+      if((vs.includes('고등학교')||vs.includes('중학교'))&&vs.length<30) school=vs;
+      if(vs.includes('반')&&vs.includes('학년')) classInfo=vs;
+    }
+  }
+
+  // 학년·학기 정보 추출 (classInfo에서) — 학년/학기 컬럼이 아예 없는 구버전 파일의 폴백값
+  const gradeMatch=classInfo.match(/(\d+)\s*학년/);
+  const fallbackGrade=gradeMatch?parseInt(gradeMatch[1]):null;
+
+  // ── 헤더 컬럼 인덱스 동적 탐지 (공백이 섞인 헤더 텍스트 대응: "학 년","학 기"," 교 과" 등) ──
+  const norm=s=>String(s==null?'':s).replace(/\s+/g,'');
+  let col=null;
+  for(let i=0;i<raw.length;i++){
+    const row=raw[i]||[];
+    const normed=row.map(norm);
+    if(normed.includes('번호')&&normed.includes('성명')){
+      col={
+        번호:normed.indexOf('번호'), 성명:normed.indexOf('성명'),
+        학년:normed.indexOf('학년'), 학기:normed.indexOf('학기'),
+        교과:normed.indexOf('교과'), 과목:normed.indexOf('과목'),
+        학점:normed.indexOf('학점'),
+        원점수:normed.findIndex(v=>v.includes('원점수')),
+        성취도:normed.indexOf('성취도'),
+        분포:normed.findIndex(v=>v.includes('분포비율')),
+        석차등급:normed.indexOf('석차등급'),
+        수강자수:normed.indexOf('수강자수'),
+      };
+      break;
+    }
+  }
+  // 컬럼을 못 찾으면 나이스 표준 배치(구버전 호환)로 폴백
+  if(!col || col.번호<0 || col.과목<0){
+    col={번호:0,성명:1,학년:2,학기:3,교과:4,과목:5,학점:6,원점수:7,성취도:8,분포:9,석차등급:10,수강자수:11};
+  }
+
+  const records=[];
+  let curNum=null, curName='', curGrade=fallbackGrade, curSem=null;
+  for(const row of raw){
+    const v0=String(row[col.번호]||'').trim();
+    const v1=String(row[col.성명]||'').trim();
+    if(['번 호','번호','이수학점 합계'].includes(v0)||v0.includes('학교생활')) continue;
+
+    // 학생 번호/이름 갱신 (바뀔 때만 표시되고 이후 행은 공백 → 이전 값 유지)
+    const n=parseInt(v0);
+    if(!isNaN(n)&&n>0&&n<100){curNum=n; curName=v1;}
+
+    // 학년/학기 갱신 (바뀔 때만 표시되고 이후 행은 공백 → 이전 값 유지)
+    if(col.학년>=0){
+      const gv=parseInt(row[col.학년]);
+      if(!isNaN(gv)) curGrade=gv;
+    }
+    if(col.학기>=0){
+      const sv=parseInt(row[col.학기]);
+      if(!isNaN(sv)) curSem=sv;
+    }
+    // 학기 컬럼이 아예 없거나 값이 한 번도 안 잡힌 경우: 과목명 끝자리 숫자로 보조 판별
+    if(curSem==null){
+      const subjTmp=String(row[col.과목]||'').trim();
+      const lastCh=subjTmp.slice(-1);
+      if(lastCh==='1') curSem=1; else if(lastCh==='2') curSem=2;
+    }
+
+    const subj=String(row[col.과목]||'').trim();
+    const rawScore=String(row[col.원점수]||'').trim();
+    if(!subj||!rawScore.includes('/')||!curNum) continue;
+
+    const [rs,avg]=rawScore.split('/').map(Number);
+    records.push({
+      번호:curNum, 이름:curName,
+      학년:curGrade, 학기:curSem,
+      교과:String(row[col.교과]||'').trim(),
+      과목:subj,
+      학점:parseInt(row[col.학점])||0,
+      원점수:isNaN(rs)?null:rs,
+      과목평균:isNaN(avg)?null:avg,
+      성취도:String(row[col.성취도]||'').trim(),
+      분포:String(row[col.분포]||'').trim(),
+      석차등급:parseInt(row[col.석차등급])||null,
+      수강자수:parseInt(row[col.수강자수])||null,
+    });
+  }
+
+  // 반 이름 정규화
+  const banMatch=classInfo.match(/(\d+)\s*반/);
+  const normClass=banMatch?banMatch[1]+'반':classInfo;
+
+  // 학년+학기 조합별로 그룹화 (한 파일에 여러 학년의 누적 성적이 섞여 있어도 정확히 분리됨)
+  const semKeySet=new Set(records.map(r=>`${r.학년 ?? ''}_${r.학기 ?? ''}`).filter(k=>k!=='_'));
+  const semKeys=[...semKeySet].sort((a,b)=>{
+    const [ga,sa]=a.split('_').map(v=>parseInt(v)||0);
+    const [gb,sb]=b.split('_').map(v=>parseInt(v)||0);
+    return ga-gb||sa-sb;
+  });
+
+  if(semKeys.length===0){
+    // 학년·학기 정보 자체를 못 찾음 (아주 오래된 형식) → 자동 이름 없이 하나로
+    const stuMap={};
+    for(const r of records){
+      if(!stuMap[r.번호]) stuMap[r.번호]={번호:r.번호,이름:r.이름,반:normClass,records:[]};
+      stuMap[r.번호].records.push({교과:r.교과,과목:r.과목,학점:r.학점,
+        원점수:r.원점수,과목평균:r.과목평균,성취도:r.성취도,
+        석차등급:r.석차등급,수강자수:r.수강자수});
+    }
+    return [{school,classInfo:normClass,semLabel:null,students:Object.values(stuMap)}];
+  }
+
+  // 학년+학기별로 분리 반환 (조합이 하나뿐이어도 "1학년 1학기"처럼 자동 이름 부여)
+  return semKeys.map(key=>{
+    const [g,s]=key.split('_').map(v=>parseInt(v)||null);
+    const semRecs=records.filter(r=>r.학년===g&&r.학기===s);
+    const stuMap={};
+    for(const r of semRecs){
+      if(!stuMap[r.번호]) stuMap[r.번호]={번호:r.번호,이름:r.이름,반:normClass,records:[]};
+      stuMap[r.번호].records.push({교과:r.교과,과목:r.과목,학점:r.학점,
+        원점수:r.원점수,과목평균:r.과목평균,성취도:r.성취도,
+        석차등급:r.석차등급,수강자수:r.수강자수});
+    }
+    const semName=g?`${g}학년 ${s}학기`:`${s}학기`;
+    return {school,classInfo:normClass,semLabel:semName,students:Object.values(stuMap)};
+  });
+}
+
+// ─── 가등급 계산 ─────────────────────────────────────────────
+function topPctToGrade5(pct){
+  if(pct<=10) return 1;
+  if(pct<=34) return 2;
+  if(pct<=66) return 3;
+  if(pct<=90) return 4;
+  return 5;
+}
+
+function normCDF(z){
+  // 표준정규분포 누적확률 (근사)
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const sign=z<0?-1:1;
+  const x=Math.abs(z);
+  const t=1/(1+p*x);
+  const y=1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-x*x);
+  return 0.5*(1+sign*y);
+}
+
+function parseExamWorkbook(wb){
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+
+  // 헤더 행 찾기
+  let headerRow=4;
+  for(let i=0;i<8;i++){
+    const row=raw[i]||[];
+    if(row.some(v=>String(v).trim()==='성명'||String(v).trim()==='번호')){
+      headerRow=i; break;
+    }
+  }
+  const headers=(raw[headerRow]||[]).map(v=>String(v).trim());
+
+  // 과목 컬럼 파싱 (학점 포함)
+  const subjects={};
+  headers.forEach((h,i)=>{
+    const m=h.match(/^(.+?)\((\d+)\)$/);
+    if(m) subjects[i]={name:m[1].trim(),credit:parseInt(m[2])};
+  });
+
+  // 반·번호·성명 컬럼
+  const banCol=headers.findIndex(h=>h==='반');
+  const numCol=headers.findIndex(h=>h==='번호');
+  const nameCol=headers.findIndex(h=>h==='성명');
+
+  const records=[];
+  let curBan=null;
+  for(let i=headerRow+1;i<raw.length;i++){
+    const row=raw[i]||[];
+    const banVal=String(row[banCol]||'').trim();
+    if(banVal&&!isNaN(parseInt(banVal))) curBan=parseInt(banVal);
+    const name=String(row[nameCol]||'').trim();
+    if(!name||['성명','총점','평균'].includes(name)) continue;
+    const num=parseInt(row[numCol])||null;
+    const rec={반:curBan,번호:num,이름:name,scores:{}};
+    Object.entries(subjects).forEach(([col,{name:subj,credit}])=>{
+      const v=parseFloat(row[col]);
+      if(!isNaN(v)) rec.scores[subj]={score:v,credit};
+    });
+    records.push(rec);
+  }
+
+  // 과목별 전교생 기준 가등급 계산
+  const subjNames=[...new Set(Object.values(subjects).map(s=>s.name))];
+  const gradeMap={};
+  subjNames.forEach(subj=>{
+    const scored=records.filter(r=>r.scores[subj]!=null);
+    if(scored.length<2){gradeMap[subj]=null;return;}
+    const vals=scored.map(r=>r.scores[subj].score);
+    const mean=vals.reduce((a,b)=>a+b,0)/vals.length;
+    const std=Math.sqrt(vals.map(v=>(v-mean)**2).reduce((a,b)=>a+b,0)/vals.length);
+    if(std===0){gradeMap[subj]=null;return;}
+    gradeMap[subj]={mean,std,total:scored.length};
+  });
+
+  // 학생별 가등급 계산
+  records.forEach(r=>{
+    Object.entries(r.scores).forEach(([subj,{score,credit}])=>{
+      const gm=gradeMap[subj];
+      if(!gm){r.scores[subj].grade=null;r.scores[subj].topPct=null;return;}
+      const z=(score-gm.mean)/gm.std;
+      const topPct=round2((1-normCDF(z))*100);
+      r.scores[subj].grade=topPctToGrade5(topPct);
+      r.scores[subj].topPct=topPct;
+      r.scores[subj].rank=Math.round(topPct/100*gm.total)||1;
+      r.scores[subj].total=gm.total;
+    });
+  });
+
+  return{records,subjects:Object.values(subjects),gradeMap};
+}
+
+function round2(v){return Math.round(v*100)/100;}
+
+// 가등급 데이터 → 학기 형식 변환
+function examToSemester(examData,semName){
+  const{records,subjects}=examData;
+  // 반별 그룹화
+  const banMap={};
+  records.forEach(r=>{
+    const key=r.반||'전체';
+    if(!banMap[key]) banMap[key]=[];
+    banMap[key].push(r);
+  });
+
+  // 모든 학생을 하나의 semester로
+  const students=records.map(r=>{
+    const recs=Object.entries(r.scores).map(([subj,info])=>({
+      교과:subj, 과목:subj, 학점:info.credit||0,
+      원점수:info.score, 과목평균:null, 성취도:scoreToAchv(info.score),
+      석차등급:null,       // 나이스 정식 등급 없음
+      가등급:info.grade,   // 가등급!
+      상위퍼센트:info.topPct,
+      전교등수:info.rank, 전교수강자:info.total,
+      수강자수:info.total,
+    }));
+    return{번호:r.번호,이름:r.이름,반:`${r.반}반`,records:recs};
+  });
+  return{id:uid(),name:semName,type:'exam',students};
+}
+
+function scoreToAchv(score){
+  if(score==null||isNaN(score)) return '';
+  if(score>=90) return 'A';
+  if(score>=80) return 'B';
+  if(score>=70) return 'C';
+  if(score>=60) return 'D';
+  return 'E';
+}
+
+// ─── 통계 헬퍼 ───────────────────────────────────────────────
+function avg(arr){const a=arr.filter(v=>v!=null&&!isNaN(v));return a.length?a.reduce((s,v)=>s+v,0)/a.length:null;}
+function gradeDistrib(recs,field='석차등급',max=9){
+  const dist=Array(max).fill(0);
+  for(const r of recs){
+    const g=r[field]||( field==='석차등급'?r.가등급:null);
+    if(g&&g>=1&&g<=max)dist[g-1]++;
+  }
+  return dist;
+}
+
+// ─── 렌더링 ──────────────────────────────────────────────────
+const view=document.getElementById('view');
+
+function render(){
+  if(state.tab==='dashboard') renderDashboard();
+  else if(state.tab==='student') renderStudent();
+  else if(state.tab==='class') renderClass();
+}
+
+// ══ 대시보드 ══════════════════════════════════════════════════
+function renderDashboard(){
+  if(!state.semesters.length){
+    view.innerHTML=`<div class="card" style="margin-top:20px;text-align:center;padding:60px">
+      <div style="font-size:48px;margin-bottom:16px">📂</div>
+      <p style="color:var(--txt2);font-size:16px;font-weight:600">아직 데이터가 없습니다</p>
+      <p style="color:var(--txt3);font-size:14px;margin-top:6px">상단의 <b>⊕ 데이터 업로드</b> 버튼을 눌러 나이스 파일을 추가하세요.</p>
+    </div>`;
+    return;
+  }
+
+  // 현재 선택 학기
+  if(!state.selSem&&state.semesters.length) state.selSem=state.semesters[0].id;
+  const sem = state.semesters.find(s=>s.id===state.selSem) || state.semesters[0];
+  const allRecs = sem.students.flatMap(s=>s.records);
+  const subjects = [...new Set(allRecs.map(r=>r.과목))];
+  const totalStu = sem.students.length;
+  const avgGrade = avg(allRecs.filter(r=>r.석차등급||r.가등급).map(r=>r.석차등급||r.가등급));
+  const avgScore = avg(allRecs.filter(r=>r.원점수!=null).map(r=>r.원점수));
+
+  // 과목별 통계
+  const subjStats = subjects.map(subj=>{
+    const recs=allRecs.filter(r=>r.과목===subj);
+    const grades=recs.map(r=>r.석차등급||r.가등급).filter(g=>g);
+    const scores=recs.map(r=>r.원점수).filter(v=>v!=null);
+    const achvs=recs.map(r=>r.성취도).filter(v=>v);
+    const achvCnt={A:0,B:0,C:0,D:0,E:0};
+    achvs.forEach(a=>{if(achvCnt[a]!==undefined)achvCnt[a]++;});
+    return{subj,cnt:recs.length,avgGrade:avg(grades),avgScore:avg(scores),
+           dist:gradeDistrib(recs),achvCnt,학점:recs[0]?.학점||0};
+  });
+
+  view.innerHTML=`
+  <div class="grid g4" style="margin-top:20px">
+    <div class="card"><div class="stat"><div class="ic b">👥</div><div>
+      <div class="ln">응시 학생 수</div><div class="big">${totalStu}명</div></div></div></div>
+    <div class="card"><div class="stat"><div class="ic g">📚</div><div>
+      <div class="ln">분석 과목 수</div><div class="big">${subjects.length}개</div></div></div></div>
+    <div class="card"><div class="stat"><div class="ic o">📊</div><div>
+      <div class="ln">평균 석차등급</div>
+      <div class="big" style="color:${avgGrade?gradeHex(avgGrade):'var(--txt)'}">${avgGrade?avgGrade.toFixed(2):'–'}</div>
+    </div></div></div>
+    <div class="card"><div class="stat"><div class="ic p">✏️</div><div>
+      <div class="ln">평균 원점수</div><div class="big">${avgScore?avgScore.toFixed(1):'–'}점</div>
+    </div></div></div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-head"><h3>과목별 종합 요약</h3>
+        <div class="seg" id="seg-subj">
+          <button data-m="grade" class="on">등급</button>
+          <button data-m="score">원점수</button>
+          <button data-m="achv">성취도</button>
+        </div>
+      </div>
+      <div class="sub">${esc(sem.name)} · ${totalStu}명 기준</div>
+      <div class="scroll" id="subj-table-wrap">
+        ${renderSubjTable(subjStats,'grade')}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>과목별 등급 분포</h3></div>
+      <div class="sub">${esc(sem.name)} · 1~9등급 인원</div>
+      <div class="scroll">${renderDistTable(subjStats)}</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>등급 분포도</h3></div>
+    <div class="sub">${esc(sem.name)} · 1~9등급 인원 분포 (마우스를 올리면 과목별 인원 표시)</div>
+    <div class="chartbox">${renderDistChart(subjStats,'c-dist')}</div>
+    <div class="legend" id="legend-dist">${subjStats.map((s,i)=>
+      `<span class="lg"><span class="sw" style="background:${SEM_COLORS[i%SEM_COLORS.length]};border-radius:2px"></span>${esc(s.subj)}</span>`
+    ).join('')}</div>
+  </div>
+
+  <div class="grid g2">
+    <div class="card">
+      <div class="card-head"><h3>과목별 등급 분포</h3></div>
+      <div class="sub">${esc(sem.name)} · 1~9등급 인원</div>
+      <div class="scroll">${renderDistTable(subjStats)}</div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3>성취도 분포</h3></div>
+      <div class="sub">${esc(sem.name)} · 과목별 성취도 A~E 인원</div>
+      <div class="scroll">${renderAchvTable(subjStats)}</div>
+    </div>
+  </div>
+  `;
+
+  // 세그먼트 이벤트
+  document.getElementById('seg-subj').querySelectorAll('button').forEach(btn=>{
+    btn.onclick=()=>{
+      document.getElementById('seg-subj').querySelectorAll('button').forEach(b=>b.classList.remove('on'));
+      btn.classList.add('on');
+      document.getElementById('subj-table-wrap').innerHTML=renderSubjTable(subjStats,btn.dataset.m);
+    };
+  });
+
+  // 차트 tooltip
+  bindDistChart('c-dist',subjStats);
+}
+
+function renderSubjTable(subjStats,mode){
+  const rows=subjStats.map(s=>{
+    let valCell='';
+    if(mode==='grade'){
+      const g=s.avgGrade;
+      valCell=g?`<span class="avg-badge" style="background:${gradeHex(g)}66">${g.toFixed(2)}</span>`:'<span class="muted">–</span>';
+    }else if(mode==='score'){
+      valCell=s.avgScore!=null?`<span class="cell-num">${s.avgScore.toFixed(1)}</span>`:'<span class="muted">–</span>';
+    }else{
+      const m=Object.entries(s.achvCnt).sort((a,b)=>b[1]-a[1])[0];
+      valCell=m&&m[1]>0?`<span class="achv" style="background:${achvHex(m[0])}">${m[0]} (${m[1]}명)</span>`:'<span class="muted">–</span>';
+    }
+    return`<tr><td class="subj-name">${esc(s.subj)}</td><td class="cell-num">${s.cnt}</td>
+           <td>${valCell}</td></tr>`;
+  }).join('');
+  const hdr=mode==='grade'?'평균 등급':mode==='score'?'평균 원점수':'주요 성취도';
+  return`<table><thead><tr><th class="subj-name">과목</th><th>응시</th><th>${hdr}</th></tr></thead>
+         <tbody>${rows}</tbody></table>`;
+}
+
+function renderDistTable(subjStats){
+  const hdr=[1,2,3,4,5,6,7,8,9].map(g=>
+    `<th><span class="gchip" style="background:${GRADE_HEX[g]}">${g}</span></th>`).join('');
+  const rows=subjStats.map(s=>{
+    const max=Math.max(...s.dist,1);
+    const cells=s.dist.map((cnt,i)=>{
+      const op=.2+.8*(cnt/max);
+      return`<td><span style="display:inline-block;min-width:28px;padding:4px 0;border-radius:6px;
+             background:${GRADE_HEX[i+1]}${Math.round(op*99).toString(16).padStart(2,'0')};font-weight:600;font-size:12px">${cnt||'·'}</span></td>`;
+    }).join('');
+    const g=s.avgGrade;
+    return`<tr><td class="subj-name">${esc(s.subj)}</td><td class="muted">${s.cnt}</td>
+           <td><span class="avg-badge" style="background:${g?gradeHex(g)+'66':'#f5f5f5'}">${g?g.toFixed(2):'–'}</span></td>${cells}</tr>`;
+  }).join('');
+  return`<table><thead><tr><th class="subj-name">과목</th><th>응시</th><th>평균</th>${hdr}</tr></thead>
+         <tbody>${rows}</tbody></table>`;
+}
+
+function renderAchvTable(subjStats){
+  const rows=subjStats.map(s=>{
+    const total=Object.values(s.achvCnt).reduce((a,b)=>a+b,0)||1;
+    const cells=['A','B','C','D','E'].map(a=>{
+      const cnt=s.achvCnt[a]||0;
+      const op=.15+.85*(cnt/total);
+      return`<td><span style="display:inline-block;min-width:28px;padding:4px 2px;border-radius:6px;
+             background:${achvHex(a)}${Math.round(op*99).toString(16).padStart(2,'0')};font-weight:700;font-size:12px">${cnt||'·'}</span></td>`;
+    }).join('');
+    return`<tr><td class="subj-name">${esc(s.subj)}</td>${cells}</tr>`;
+  }).join('');
+  return`<table><thead><tr><th class="subj-name">과목</th>
+         ${['A','B','C','D','E'].map(a=>`<th><span class="achv" style="background:${achvHex(a)}">${a}</span></th>`).join('')}
+         </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderDistChart(subjStats,id){
+  const W=620,H=280,padL=44,padR=16,padT=20,padB=30;
+  const grades=[1,2,3,4,5,6,7,8,9];
+  const maxCnt=Math.max(...subjStats.flatMap(s=>s.dist),1);
+  const xStep=(W-padL-padR)/(grades.length-1);
+  const yScale=(H-padT-padB)/maxCnt;
+  const yTicks=[0,Math.ceil(maxCnt/4),Math.ceil(maxCnt/2),Math.ceil(maxCnt*3/4),maxCnt];
+
+  let svg=`<svg id="${id}" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto" data-max="${maxCnt}">`;
+  // 그리드
+  yTicks.forEach(v=>{
+    const y=H-padB-v*yScale;
+    svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#EEF1F6"/>
+          <text x="${padL-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#93A1B5">${v}</text>`;
+  });
+  // 선
+  subjStats.forEach((s,si)=>{
+    const color=SEM_COLORS[si%SEM_COLORS.length];
+    const pts=s.dist.map((cnt,i)=>{
+      const x=padL+i*xStep;
+      const y=H-padB-cnt*yScale;
+      return`${x},${y}`;
+    });
+    svg+=`<path d="M${pts.join(' L')}" fill="none" stroke="${color}" stroke-width="2.4"
+               stroke-linejoin="round" stroke-linecap="round" opacity=".92"
+               data-si="${si}" class="dist-line"/>`;
+    s.dist.forEach((cnt,i)=>{
+      const x=padL+i*xStep; const y=H-padB-cnt*yScale;
+      svg+=`<circle cx="${x}" cy="${y}" r="3.4" fill="#fff" stroke="${color}" stroke-width="2"
+             data-si="${si}" data-gi="${i}" data-cnt="${cnt}" class="dist-pt"/>`;
+    });
+  });
+  // x축
+  grades.forEach((g,i)=>{
+    const x=padL+i*xStep;
+    svg+=`<text x="${x}" y="${H-2}" text-anchor="middle" font-size="11.5" fill="#5A6B82">${g}등급</text>`;
+  });
+  // hover 영역
+  grades.forEach((g,i)=>{
+    const x=padL+i*xStep-xStep/2;
+    svg+=`<rect x="${Math.max(0,x)}" y="${padT}" width="${xStep}" height="${H-padT-padB}"
+               fill="transparent" data-gi="${i}" class="dist-hit" style="cursor:pointer"/>`;
+  });
+  svg+=`</svg><div class="tip" id="${id}-tip"></div>`;
+  return svg;
+}
+
+function bindDistChart(id,subjStats){
+  const svg=document.getElementById(id);
+  if(!svg) return;
+  const tip=document.getElementById(id+'-tip');
+  svg.querySelectorAll('.dist-hit').forEach(rect=>{
+    rect.addEventListener('mouseenter',e=>{
+      const gi=parseInt(rect.dataset.gi);
+      const grade=gi+1;
+      const items=subjStats.map((s,si)=>{
+        const cnt=s.dist[gi];
+        return`<div class="tr"><span class="sw" style="background:${SEM_COLORS[si%SEM_COLORS.length]}"></span>${esc(s.subj)}<b>${cnt}명</b></div>`;
+      }).join('');
+      tip.innerHTML=`<div class="th">${grade}등급</div>${items}`;
+      const r=rect.getBoundingClientRect(); const pr=svg.getBoundingClientRect();
+      tip.style.display='block';
+      tip.style.left=(r.left-pr.left+r.width/2-60)+'px';
+      tip.style.top='10px';
+    });
+    rect.addEventListener('mouseleave',()=>{tip.style.display='none';});
+  });
+}
+
+function renderTrendChart(){
+  const sems=state.semesters;
+  const W=700,H=240,padL=44,padR=16,padT=20,padB=30;
+  const xStep=(W-padL-padR)/(sems.length-1||1);
+  const vals=sems.map(s=>{
+    const recs=s.students.flatMap(st=>st.records);
+    return avg(recs.filter(r=>r.석차등급).map(r=>r.석차등급));
+  });
+  const minV=1, maxV=9;
+  const yScale=(H-padT-padB)/(maxV-minV);
+  const pts=vals.map((v,i)=>{
+    const x=padL+(sems.length===1?0:i*xStep);
+    const y=H-padB-(v!=null?(v-minV)*yScale:0);
+    return{x,y,v};
+  });
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">`;
+  [1,3,5,7,9].forEach(g=>{
+    const y=H-padB-(g-minV)*yScale;
+    svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#EEF1F6"/>
+          <text x="${padL-6}" y="${y+4}" text-anchor="end" font-size="11" fill="#93A1B5">${g}등급</text>`;
+  });
+  if(pts.length>1){
+    svg+=`<path d="M${pts.map(p=>`${p.x},${p.y}`).join(' L')}" fill="none"
+               stroke="${SEM_COLORS[0]}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  pts.forEach((p,i)=>{
+    svg+=`<circle cx="${p.x}" cy="${p.y}" r="5" fill="${gradeHex(p.v)}" stroke="${SEM_COLORS[0]}" stroke-width="2"/>
+          <text x="${p.x}" y="${p.y-10}" text-anchor="middle" font-size="11" font-weight="700" fill="${SEM_COLORS[0]}">${p.v?.toFixed(2)||'–'}</text>`;
+  });
+  sems.forEach((s,i)=>{
+    const x=padL+(sems.length===1?0:i*xStep);
+    svg+=`<text x="${x}" y="${H-2}" text-anchor="middle" font-size="11.5" fill="#5A6B82">${esc(s.name)}</text>`;
+  });
+  svg+=`</svg>`;
+  return svg;
+}
+
+// ══ 학생 조회 ══════════════════════════════════════════════════
+function renderStudent(){
+  const students=state.semesters.flatMap(sem=>
+    sem.students.map(s=>({...s,semId:sem.id,semName:sem.name}))
+  );
+  function normBan(b){
+    if(!b) return '전체';
+    const m=String(b).match(/(\d+)\s*반/);
+    return m?m[1]+'반':b;
+  }
+  
+  // 동명이인 구분: '반 번호번 이름' 복합키 사용
+  const nameMap={};
+  students.forEach(s=>{
+    const num=s.번호!=null?s.번호:'?';
+    const ban=normBan(s.반)||'?';
+    const label=`${ban} ${num}번 ${s.이름||''}`.trim();
+    if(!nameMap[label]) nameMap[label]=[];
+    const alreadyHasSem=nameMap[label].some(e=>e.semId===s.semId);
+    if(!alreadyHasSem) nameMap[label].push(s);
+  });
+  // 반 이름 정규화: "2학년 1반" → "1반" (숫자만 추출)
+
+  // 반 목록 (번호순 정렬, 정규화 적용)
+  const banSet=new Set();
+  students.forEach(s=>banSet.add(normBan(s.반)));
+  const bans=[...banSet].sort((a,b)=>{
+    const na=parseInt(a),nb=parseInt(b);
+    return !isNaN(na)&&!isNaN(nb)?na-nb:a.localeCompare(b);
+  });
+  if(!state.selBan&&bans.length) state.selBan=bans[0];
+  const curBan=state.selBan||bans[0];
+
+  // 현재 반 학생 (번호순) — 반 이름 정규화해서 비교
+  const banStudents={};
+  Object.entries(nameMap).forEach(([name,sems])=>{
+    if(normBan(sems[0]?.반)===curBan) banStudents[name]=sems;
+  });
+  const names=Object.keys(banStudents).sort((a,b)=>{
+    const na=parseInt(nameMap[a][0]?.번호),nb=parseInt(nameMap[b][0]?.번호);
+    return !isNaN(na)&&!isNaN(nb)?na-nb:a.localeCompare(b);
+  });
+
+  const sel=state.selStudent&&banStudents[state.selStudent]?state.selStudent:null;
+  const stuData=sel?banStudents[sel]:null;
+
+  view.innerHTML=`
+  <div class="card" style="margin-top:20px">
+    <div class="pick" style="gap:14px;align-items:flex-end">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--txt3);margin-bottom:4px">반 선택</div>
+        <select id="ban-pick" style="min-width:100px">
+          ${bans.map(b=>`<option value="${esc(b)}" ${b===curBan?'selected':''}>${esc(b)}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--txt3);margin-bottom:4px">학생 선택</div>
+        <select id="stu-pick" style="min-width:160px">
+          <option value="">– 학생 선택 –</option>
+          ${names.map(n=>`<option value="${esc(n)}" ${n===sel?'selected':''}>${esc(n)}</option>`).join('')}
+        </select>
+      </div>
+      ${sel?`<div class="stu-head" style="margin:0">
+        <span class="nm">${esc(sel)}</span>
+        <span class="meta">${esc(curBan)} · ${stuData.length}개 학기</span>
+      </div>`:''}
+    </div>
+    ${sel&&stuData?renderStudentDetail(sel,stuData,nameMap):`<p class="hint">반을 선택한 후 학생을 선택하면 학기별 성적이 표시됩니다.</p>`}
+  </div>`;
+
+  document.getElementById('ban-pick').onchange=e=>{
+    state.selBan=e.target.value;
+    state.selStudent=null;
+    renderStudent();
+  };
+  document.getElementById('stu-pick').onchange=e=>{
+    state.selStudent=e.target.value||null;
+    renderStudent();
+  };
+  document.querySelectorAll('.combo-chart-toggle').forEach(btn=>{
+    btn.onclick=()=>{
+      state.comboChartType=btn.dataset.type;
+      renderStudent();
+    };
+  });
+}
+
+// ─── 교과 분류 매핑 ─────────────────────────────────────────
+const EDU_MAP={
+  '공통국어1':'국어','공통국어2':'국어','문학':'국어','독서':'국어','화법과 작문':'국어','언어와 매체':'국어',
+  '공통수학1':'수학','공통수학2':'수학','대수':'수학','미적분':'수학','확률과 통계':'수학','기하':'수학',
+  '공통영어1':'영어','공통영어2':'영어','영어Ⅰ':'영어','영어Ⅱ':'영어','영어':'영어',
+  '통합사회1':'사회','통합사회2':'사회','사회·문화':'사회','정치':'사회','법과 사회':'사회',
+  '경제':'사회','윤리와 사상':'사회','생활과 윤리':'사회','세계시민과 지리':'사회','한국지리':'사회',
+  '통합과학1':'과학','통합과학2':'과학','물리학':'과학','화학':'과학','생명과학':'과학','지구과학':'과학',
+  '한국사1':'한국사','한국사2':'한국사',
+};
+const COMBOS=[
+  {key:'전교과',  label:'전교과',    set:null},
+  {key:'국영수사과',label:'국영수사과',set:new Set(['국어','영어','수학','사회','과학'])},
+  {key:'국영수사', label:'국영수사',  set:new Set(['국어','영어','수학','사회'])},
+  {key:'국영수과', label:'국영수과',  set:new Set(['국어','영어','수학','과학'])},
+  {key:'국영수',  label:'국영수',    set:new Set(['국어','영어','수학'])},
+  {key:'국영사',  label:'국영사',    set:new Set(['국어','영어','사회'])},
+  {key:'영수과',  label:'영수과',    set:new Set(['영어','수학','과학'])},
+  {key:'수과',    label:'수과',      set:new Set(['수학','과학'])},
+];
+
+function getEduCat(subj){
+  if(EDU_MAP[subj]) return EDU_MAP[subj];
+  for(const [k,v] of Object.entries(EDU_MAP)){if(subj.includes(k.slice(0,2))) return v;}
+  return '기타';
+}
+
+function calcCombos(recs){
+  return COMBOS.map(c=>{
+    const filtered=c.set===null?recs:recs.filter(r=>c.set.has(getEduCat(r.과목)));
+    if(!filtered.length) return{...c,avgGrade:null,avgScore:null,cnt:0};
+    const totCredit=filtered.reduce((s,r)=>s+(r.학점||1),0)||1;
+    // 등급: 석차등급 우선, 없으면 가등급
+    const grades=filtered.map(r=>({g:r.석차등급||r.가등급,cr:r.학점||1})).filter(x=>x.g);
+    const avgGrade=grades.length?
+      grades.reduce((s,x)=>s+x.g*x.cr,0)/grades.reduce((s,x)=>s+x.cr,0):null;
+    const scores=filtered.map(r=>({v:r.원점수,cr:r.학점||1})).filter(x=>x.v!=null);
+    const avgScore=scores.length?
+      scores.reduce((s,x)=>s+x.v*x.cr,0)/scores.reduce((s,x)=>s+x.cr,0):null;
+    return{...c,avgGrade:avgGrade?Math.round(avgGrade*100)/100:null,
+           avgScore:avgScore?Math.round(avgScore*10)/10:null,cnt:filtered.length};
+  });
+}
+
+// ── 단일 학기 과목별 가로 막대 차트 ────────────────────────
+function renderSingleSemSubjChart(sem, semIdx){
+  const recs=sem.records;
+  const isExam=sem.type==='exam'||recs.some(r=>r.가등급&&!r.석차등급);
+  const lineColor=isExam?'#7030A0':SEM_COLORS[semIdx%SEM_COLORS.length];
+
+  if(!recs.length) return '<p class="muted" style="font-size:13px">데이터 없음</p>';
+
+  const W=Math.max(400,recs.length*56+70);
+  const H=178; const padL=34,padR=12,padT=22,padB=58;
+  const xStep=(W-padL-padR)/(recs.length-1||1);
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;min-width:${W}px">`;
+
+  // 그리드 (1~9등급)
+  for(let g=1;g<=9;g++){
+    const y=padT+(g-1)*(H-padT-padB)/8;
+    svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}"
+               stroke="${g%2===1?'#E5E9F0':'#F5F6F8'}" stroke-width="${g%2===1?1:0.5}"/>`;
+    if(g%2===1) svg+=`<text x="${padL-5}" y="${y+4}" text-anchor="end" font-size="9.5" fill="#93A1B5">${g}</text>`;
+  }
+
+  // 꺾은선
+  const pts=recs.map((r,i)=>{
+    const g=r.석차등급||r.가등급;
+    if(!g) return null;
+    const x=padL+(recs.length===1?(W-padL-padR)/2:i*xStep);
+    const y=padT+(g-1)*(H-padT-padB)/8;
+    return{x,y,g,isGa:!r.석차등급&&!!r.가등급,subj:r.과목};
+  });
+
+  let pathD=''; let drawing=false;
+  pts.forEach(p=>{
+    if(!p){drawing=false;return;}
+    if(!drawing){pathD+=`M${p.x},${p.y}`;drawing=true;}
+    else pathD+=` L${p.x},${p.y}`;
+  });
+  if(pathD){
+    svg+=`<path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="2"
+               stroke-linejoin="round" stroke-linecap="round"
+               ${isExam?'stroke-dasharray="5,3"':''} opacity="0.85"/>`;
+  }
+
+  pts.forEach(p=>{
+    if(!p) return;
+    svg+=`<circle cx="${p.x}" cy="${p.y}" r="4.5" fill="${gradeHex(p.g)}"
+                 stroke="${lineColor}" stroke-width="1.6"/>
+          <text x="${p.x}" y="${p.y-8}" text-anchor="middle" font-size="9"
+                font-weight="800" fill="${p.isGa?'#7030A0':lineColor}">${p.isGa?'(가)'+p.g:p.g}</text>`;
+  });
+
+  // x축 과목명 (작게 + 더 기울여서 잘림 방지)
+  recs.forEach((r,i)=>{
+    const x=padL+(recs.length===1?(W-padL-padR)/2:i*xStep);
+    const ly=H-padB+13;
+    svg+=`<text x="${x}" y="${ly}" text-anchor="end" font-size="8.5" fill="#5A6B82"
+               transform="rotate(-38,${x},${ly})">${esc(r.과목)}</text>`;
+  });
+
+  svg+=`</svg>`;
+  return`<div class="scroll">${svg}</div>`;
+}
+
+// ── 과목별 꺾은선 차트 (학기별 겹쳐 표시) ──────────────────
+function renderSubjBarChart(stuData){
+  const sems=stuData;
+  if(!sems.length) return '';
+
+  // 전체 과목 목록 (등장 순서 유지)
+  const allSubjs=[...new Set(sems.flatMap(s=>s.records.map(r=>r.과목)))];
+  if(!allSubjs.length) return '';
+
+  const W=Math.max(560,allSubjs.length*60+80);
+  const H=270; const padL=44,padR=16,padT=24,padB=70;
+  const xStep=(W-padL-padR)/(allSubjs.length-1||1);
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;min-width:${W}px">`;
+
+  // y축 그리드 (1~9등급, 아래가 좋음)
+  for(let g=1;g<=9;g++){
+    const y=padT+(g-1)*(H-padT-padB)/8;
+    const isMajor=g%2===1;
+    svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}"
+               stroke="${isMajor?'#E5E9F0':'#F3F5F8'}" stroke-width="${isMajor?1:0.5}"/>`;
+    if(isMajor) svg+=`<text x="${padL-6}" y="${y+4}" text-anchor="end" font-size="10.5" fill="#93A1B5">${g}</text>`;
+  }
+
+  // 학기별 꺾은선
+  sems.forEach((sem,ti)=>{
+    const isExam=sem.type==='exam'||sem.records.some(r=>r.가등급&&!r.석차등급);
+    const color=isExam?'#7030A0':SEM_COLORS[ti%SEM_COLORS.length];
+    const pts=allSubjs.map((subj,si)=>{
+      const r=sem.records.find(r=>r.과목===subj);
+      const g=r?(r.석차등급||r.가등급):null;
+      if(g==null) return null;
+      const x=padL+(allSubjs.length===1?(W-padL-padR)/2:si*xStep);
+      const y=padT+(g-1)*(H-padT-padB)/8;
+      return{x,y,g,isGa:!!(r&&!r.석차등급&&r.가등급)};
+    });
+
+    // 연결선 (null 구간 건너뜀)
+    let pathD=''; let drawing=false;
+    pts.forEach(p=>{
+      if(!p){drawing=false;return;}
+      if(!drawing){pathD+=`M${p.x},${p.y}`;drawing=true;}
+      else pathD+=`L${p.x},${p.y}`;
+    });
+    if(pathD){
+      svg+=`<path d="${pathD}" fill="none" stroke="${color}" stroke-width="2"
+                 stroke-linejoin="round" stroke-linecap="round" opacity="0.9"
+                 ${isExam?'stroke-dasharray="5,3"':''}/>`;
+    }
+
+    // 점 + 등급 레이블
+    pts.forEach(p=>{
+      if(!p) return;
+      const ptColor=gradeHex(p.g);
+      svg+=`<circle cx="${p.x}" cy="${p.y}" r="5" fill="${ptColor}" stroke="${color}" stroke-width="1.8"/>
+            <text x="${p.x}" y="${p.y-9}" text-anchor="middle" font-size="9.5" font-weight="800"
+                  fill="${p.isGa?'#7030A0':color}">${p.isGa?'(가)'+p.g:p.g}</text>`;
+    });
+  });
+
+  // x축 과목명
+  allSubjs.forEach((subj,si)=>{
+    const x=padL+(allSubjs.length===1?(W-padL-padR)/2:si*xStep);
+    svg+=`<text x="${x}" y="${H-padB+16}" text-anchor="middle" font-size="10.5" fill="#5A6B82"
+               transform="rotate(-20,${x},${H-padB+16})">${esc(subj)}</text>`;
+  });
+
+  svg+=`</svg>`;
+
+  // 범례
+  const legend=sems.map((s,i)=>{
+    const isExam=s.type==='exam'||s.records.some(r=>r.가등급&&!r.석차등급);
+    const color=isExam?'#7030A0':SEM_COLORS[i%SEM_COLORS.length];
+    return`<span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--txt2)">
+      <svg width="22" height="12"><line x1="0" y1="6" x2="22" y2="6" stroke="${color}" stroke-width="2" ${isExam?'stroke-dasharray="4,2"':''}/><circle cx="11" cy="6" r="4" fill="${GRADE_HEX[4]||'#FFEB84'}" stroke="${color}" stroke-width="1.5"/></svg>
+      ${esc(s.semName)}${isExam?'<span style="font-size:10px;color:#7030A0">(가등급)</span>':''}
+    </span>`;
+  }).join('');
+
+  return`<div class="scroll">${svg}</div>
+         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px">${legend}</div>`;
+}
+
+// ── 교과조합별 차트: X축=8조합, 선=학기별 ──────────────────
+function renderComboLineChart(stuData){
+  const sems=stuData;
+  if(!sems.length) return '';
+
+  const data=sems.map(s=>{
+    const combos=calcCombos(s.records);
+    const isExam=s.type==='exam'||s.records.some(r=>r.가등급&&!r.석차등급);
+    return{semName:s.semName,isExam,vals:COMBOS.map(c=>combos.find(x=>x.key===c.key)?.avgGrade||null)};
+  }).filter(s=>s.vals.some(v=>v!=null));
+
+  if(!data.length) return '<p class="hint">교과조합 데이터가 없습니다.</p>';
+
+  // 전체학기(누적) 라인 — 항상 마지막에 추가, 굵은 검정 실선으로 구분
+  if(stuData.length>1){
+    const allRecs=stuData.flatMap(s=>s.records);
+    const allCombos=calcCombos(allRecs);
+    const allVals=COMBOS.map(c=>allCombos.find(x=>x.key===c.key)?.avgGrade||null);
+    if(allVals.some(v=>v!=null)) data.push({semName:'전체학기(누적)',isExam:false,isTotal:true,vals:allVals});
+  }
+
+  const W=Math.max(640,COMBOS.length*90+140);
+  const H=280; const padL=50,padR=24,padT=28,padB=48;
+  const xStep=(W-padL-padR)/(COMBOS.length-1);
+
+  const allVals=data.flatMap(s=>s.vals).filter(v=>v!=null);
+  const minV=Math.max(1,Math.floor(Math.min(...allVals))-0.5);
+  const maxV=Math.min(9,Math.ceil(Math.max(...allVals))+0.5);
+  const yRange=maxV-minV||1;
+  const yScale=(H-padT-padB)/yRange;
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;min-width:${W}px">`;
+
+  // 배경 띠
+  for(let g=Math.ceil(minV);g<=Math.floor(maxV);g++){
+    const y1=padT+(g-1-minV)*yScale;
+    const y2=padT+(g-minV)*yScale;
+    svg+=`<rect x="${padL}" y="${y1}" width="${W-padL-padR}" height="${y2-y1}"
+               fill="${GRADE_HEX[g]||'#f5f5f5'}" opacity="0.07"/>`;
+  }
+
+  // 그리드 & Y축
+  for(let g=Math.ceil(minV);g<=Math.floor(maxV);g++){
+    const y=padT+(g-minV)*yScale;
+    svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#E5E9F0"/>
+          <text x="${padL-7}" y="${y+4}" text-anchor="end" font-size="11" fill="#93A1B5">${g}등급</text>`;
+  }
+
+  // X축 조합 이름
+  COMBOS.forEach((c,i)=>{
+    const x=padL+i*xStep;
+    svg+=`<line x1="${x}" y1="${padT}" x2="${x}" y2="${H-padB}" stroke="#EEF1F6"/>
+          <text x="${x}" y="${H-padB+16}" text-anchor="middle" font-size="11.5" font-weight="700"
+                fill="#5A6B82">${esc(c.label)}</text>`;
+  });
+
+  // 학기별 선 (굵기/스타일 다양화로 구분)
+  const STYLES=[
+    {w:'2.8', dash:'none',    op:'1'},
+    {w:'2.4', dash:'none',    op:'0.9'},
+    {w:'2',   dash:'7,3',    op:'0.95'},
+    {w:'2',   dash:'3,3',    op:'0.9'},
+  ];
+
+  data.forEach((s,ti)=>{
+    const isExam=s.isExam;
+    const color=s.isTotal?'#222':(isExam?'#7030A0':SEM_COLORS[ti%SEM_COLORS.length]);
+    const style=s.isTotal?{w:'3.4',dash:'none',op:'1'}:STYLES[ti%STYLES.length];
+    const pts=s.vals.map((v,i)=>{
+      if(v==null) return null;
+      const x=padL+i*xStep;
+      const y=padT+(v-minV)*yScale;
+      return{x,y,v};
+    });
+
+    let pathD=''; let drawing=false;
+    pts.forEach(p=>{
+      if(!p){drawing=false;return;}
+      if(!drawing){pathD+=`M${p.x},${p.y}`;drawing=true;}
+      else pathD+=`L${p.x},${p.y}`;
+    });
+    if(pathD){
+      svg+=`<path d="${pathD}" fill="none" stroke="${color}" stroke-width="${style.w}"
+                 stroke-linejoin="round" stroke-linecap="round"
+                 stroke-dasharray="${isExam?'6,3':style.dash}" opacity="${style.op}"/>`;
+    }
+
+    // 점: 학기마다 다른 모양 (circle/diamond/square), 전체학기는 별 모양으로 강조
+    pts.forEach((p,pi)=>{
+      if(!p) return;
+      const r=s.isTotal?7:6;
+      let shape='';
+      if(s.isTotal){
+        // 별 모양
+        const pts5=[...Array(5)].map((_,k)=>{
+          const outer=k*2*Math.PI/5-Math.PI/2, inner=outer+Math.PI/5;
+          return`${p.x+r*Math.cos(outer)},${p.y+r*Math.sin(outer)} ${p.x+r*0.42*Math.cos(inner)},${p.y+r*0.42*Math.sin(inner)}`;
+        }).join(' ');
+        shape=`<polygon points="${pts5}" fill="${gradeHex(p.v)}" stroke="${color}" stroke-width="2"/>`;
+      } else if(ti===0||isExam){
+        shape=`<circle cx="${p.x}" cy="${p.y}" r="${r}" fill="${gradeHex(p.v)}" stroke="${color}" stroke-width="2"/>`;
+      } else if(ti===1){
+        // 다이아몬드
+        shape=`<polygon points="${p.x},${p.y-r} ${p.x+r},${p.y} ${p.x},${p.y+r} ${p.x-r},${p.y}"
+                 fill="${gradeHex(p.v)}" stroke="${color}" stroke-width="2"/>`;
+      } else {
+        // 사각형
+        shape=`<rect x="${p.x-r+1}" y="${p.y-r+1}" width="${(r-1)*2}" height="${(r-1)*2}"
+                 fill="${gradeHex(p.v)}" stroke="${color}" stroke-width="2"/>`;
+      }
+      // 값 레이블: 겹침 방지를 위해 홀/짝 교대로 위/아래
+      const above=pi%2===0;
+      svg+=shape;
+      svg+=`<text x="${p.x}" y="${above?p.y-10:p.y+18}" text-anchor="middle"
+                  font-size="${s.isTotal?11:10}" font-weight="800" fill="${color}">${p.v.toFixed(2)}</text>`;
+    });
+  });
+
+  svg+=`</svg>`;
+
+  // 범례 (점 모양 포함)
+  const legend=data.map((s,i)=>{
+    const color=s.isTotal?'#222':(s.isExam?'#7030A0':SEM_COLORS[i%SEM_COLORS.length]);
+    const style=s.isTotal?{w:'3.4',dash:'none'}:STYLES[i%STYLES.length];
+    let pt='';
+    if(s.isTotal) pt=`<polygon points="12,2 13.5,6 18,6 14.5,8.5 15.7,12.5 12,10 8.3,12.5 9.5,8.5 6,6 10.5,6"
+                 fill="${GRADE_HEX[4]}" stroke="${color}" stroke-width="1.5"/>`;
+    else if(i===0||s.isExam) pt=`<circle cx="12" cy="7" r="5" fill="${GRADE_HEX[4]}" stroke="${color}" stroke-width="1.8"/>`;
+    else if(i===1) pt=`<polygon points="12,2 17,7 12,12 7,7" fill="${GRADE_HEX[4]}" stroke="${color}" stroke-width="1.8"/>`;
+    else pt=`<rect x="7" y="2" width="10" height="10" fill="${GRADE_HEX[4]}" stroke="${color}" stroke-width="1.8"/>`;
+    return`<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:${s.isTotal?'#222':'var(--txt2)'};${s.isTotal?'font-weight:800':''}">
+      <svg width="26" height="14">
+        <line x1="0" y1="7" x2="26" y2="7" stroke="${color}" stroke-width="${style.w}"
+              stroke-dasharray="${s.isExam?'5,2':style.dash}"/>
+        ${pt}
+      </svg>
+      ${esc(s.semName)}${s.isExam?'<span style="font-size:10px;color:#7030A0">(가)</span>':''}
+    </span>`;
+  }).join('');
+
+  return`<div class="scroll">${svg}</div>
+         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">${legend}</div>`;
+}
+
+
+function renderComboBarChart(stuData){
+  const sems=stuData;
+  if(!sems.length) return '';
+
+  const data=sems.map(s=>{
+    const combos=calcCombos(s.records);
+    const isExam=s.type==='exam'||s.records.some(r=>r.가등급&&!r.석차등급);
+    return{semName:s.semName,isExam,vals:COMBOS.map(c=>combos.find(x=>x.key===c.key)?.avgGrade||null)};
+  }).filter(s=>s.vals.some(v=>v!=null));
+
+  if(!data.length) return '<p class="hint">교과조합 데이터가 없습니다.</p>';
+
+  if(stuData.length>1){
+    const allRecs=stuData.flatMap(s=>s.records);
+    const allCombos=calcCombos(allRecs);
+    const allVals=COMBOS.map(c=>allCombos.find(x=>x.key===c.key)?.avgGrade||null);
+    if(allVals.some(v=>v!=null)) data.push({semName:'전체학기(누적)',isExam:false,isTotal:true,vals:allVals});
+  }
+
+  const nSeries=data.length;
+  const groupGap=28, barGap=4, barW=Math.max(16,Math.min(30,220/nSeries));
+  const groupW=nSeries*barW+(nSeries-1)*barGap;
+  const padL=50,padR=24,padT=28,padB=48;
+  const W=Math.max(640,COMBOS.length*(groupW+groupGap)+padL+padR);
+  const H=280;
+
+  const allVals=data.flatMap(s=>s.vals).filter(v=>v!=null);
+  const minV=Math.max(1,Math.floor(Math.min(...allVals))-0.5);
+  const maxV=Math.min(9,Math.ceil(Math.max(...allVals))+0.5);
+  const yRange=maxV-minV||1;
+  const yScale=(H-padT-padB)/yRange;
+  // 등급은 낮을수록 우수 → y=maxV 위치가 차트 하단(기준선), 값이 작을수록(우수할수록) 막대가 위로 길게
+  const baseY=padT+(maxV-minV)*yScale;
+
+  let svg=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;min-width:${W}px">`;
+
+  for(let g=Math.ceil(minV);g<=Math.floor(maxV);g++){
+    const y1=padT+(g-1-minV)*yScale, y2=padT+(g-minV)*yScale;
+    svg+=`<rect x="${padL}" y="${y1}" width="${W-padL-padR}" height="${y2-y1}"
+               fill="${GRADE_HEX[g]||'#f5f5f5'}" opacity="0.07"/>`;
+  }
+  for(let g=Math.ceil(minV);g<=Math.floor(maxV);g++){
+    const y=padT+(g-minV)*yScale;
+    svg+=`<line x1="${padL}" y1="${y}" x2="${W-padR}" y2="${y}" stroke="#E5E9F0"/>
+          <text x="${padL-7}" y="${y+4}" text-anchor="end" font-size="11" fill="#93A1B5">${g}등급</text>`;
+  }
+
+  COMBOS.forEach((c,ci)=>{
+    const gx=padL+ci*(groupW+groupGap);
+    svg+=`<text x="${gx+groupW/2}" y="${H-padB+16}" text-anchor="middle" font-size="11.5" font-weight="700"
+                fill="#5A6B82">${esc(c.label)}</text>`;
+    data.forEach((s,si)=>{
+      const v=s.vals[ci];
+      if(v==null) return;
+      const color=s.isTotal?'#222':(s.isExam?'#7030A0':SEM_COLORS[si%SEM_COLORS.length]);
+      const bx=gx+si*(barW+barGap);
+      const topY=padT+(v-minV)*yScale;
+      const h=baseY-topY;
+      svg+=`<rect x="${bx}" y="${topY}" width="${barW}" height="${h}" rx="3"
+                 fill="${color}" opacity="${s.isTotal?'1':'0.85'}" ${s.isTotal?'stroke="#000" stroke-width="1"':''}/>
+            <text x="${bx+barW/2}" y="${topY-5}" text-anchor="middle" font-size="9.5" font-weight="800"
+                  fill="${color}">${v.toFixed(2)}</text>`;
+    });
+  });
+
+  svg+=`</svg>`;
+
+  const legend=data.map((s,i)=>{
+    const color=s.isTotal?'#222':(s.isExam?'#7030A0':SEM_COLORS[i%SEM_COLORS.length]);
+    return`<span style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:${s.isTotal?'#222':'var(--txt2)'};${s.isTotal?'font-weight:800':''}">
+      <span style="width:14px;height:14px;border-radius:3px;background:${color};display:inline-block${s.isTotal?';outline:1px solid #000;outline-offset:1px':''}"></span>
+      ${esc(s.semName)}${s.isExam?'<span style="font-size:10px;color:#7030A0">(가)</span>':''}
+    </span>`;
+  }).join('');
+
+  return`<div class="scroll">${svg}</div>
+         <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:12px">${legend}</div>`;
+}
+
+function renderStudentDetail(name,stuData,nameMap){
+  // ── 전체학기(누적) 교과조합 평균 ─────────────────────────────
+  const allRecs=stuData.flatMap(s=>s.records);
+  const allCombos=calcCombos(allRecs);
+  const allAvgS=avg(allRecs.filter(r=>r.원점수!=null).map(r=>r.원점수));
+
+  // ── 학기별 요약 테이블 (교과조합 포함) ─────────────────────
+  const summaryRows=stuData.map((s,si)=>{
+    const recs=s.records;
+    const isExam=s.type==='exam'||recs.some(r=>r.가등급&&!r.석차등급);
+    const combos=calcCombos(recs);
+    const c전교과=combos.find(c=>c.key==='전교과')||{avgGrade:null};
+    const c국영수사과=combos.find(c=>c.key==='국영수사과')||{avgGrade:null};
+    const c국영수사=combos.find(c=>c.key==='국영수사')||{avgGrade:null};
+    const c국영수과=combos.find(c=>c.key==='국영수과')||{avgGrade:null};
+    const c국영수=combos.find(c=>c.key==='국영수')||{avgGrade:null};
+    const avgS=avg(recs.filter(r=>r.원점수!=null).map(r=>r.원점수));
+    const semColor=SEM_COLORS[si%SEM_COLORS.length];
+    function gb(c){return c.avgGrade?`<span class="avg-badge" style="background:${gradeHex(c.avgGrade)}66">${c.avgGrade.toFixed(2)}</span>`:'<span class="muted">–</span>';}
+    return`<tr>
+      <td class="subj-name" style="color:${isExam?'#7030A0':'inherit'};font-weight:700;white-space:nowrap">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${semColor};margin-right:6px;vertical-align:middle"></span>
+        ${esc(s.semName)}${isExam?'<span style="font-size:10px;background:#F3E5F5;color:#7030A0;padding:1px 5px;border-radius:4px;margin-left:5px">가등급</span>':''}
+      </td>
+      <td class="cell-num">${recs.length}과목</td>
+      <td>${gb(c전교과)}</td>
+      <td>${gb(c국영수사과)}</td>
+      <td>${gb(c국영수사)}</td>
+      <td>${gb(c국영수과)}</td>
+      <td>${gb(c국영수)}</td>
+      <td class="cell-num">${avgS?avgS.toFixed(1):'–'}</td>
+    </tr>`;
+  }).join('');
+  // 전체학기(누적) 행 — 강조 표시
+  const allSummaryRow=(()=>{
+    const c전교과=allCombos.find(c=>c.key==='전교과')||{avgGrade:null};
+    const c국영수사과=allCombos.find(c=>c.key==='국영수사과')||{avgGrade:null};
+    const c국영수사=allCombos.find(c=>c.key==='국영수사')||{avgGrade:null};
+    const c국영수과=allCombos.find(c=>c.key==='국영수과')||{avgGrade:null};
+    const c국영수=allCombos.find(c=>c.key==='국영수')||{avgGrade:null};
+    function gb(c){return c.avgGrade?`<span class="avg-badge" style="background:${gradeHex(c.avgGrade)}">${c.avgGrade.toFixed(2)}</span>`:'<span class="muted">–</span>';}
+    return`<tr style="background:#FFF7E0;font-weight:800">
+      <td class="subj-name" style="white-space:nowrap">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#333;margin-right:6px;vertical-align:middle"></span>
+        전체학기 (누적)
+      </td>
+      <td class="cell-num">${allRecs.length}과목</td>
+      <td>${gb(c전교과)}</td>
+      <td>${gb(c국영수사과)}</td>
+      <td>${gb(c국영수사)}</td>
+      <td>${gb(c국영수과)}</td>
+      <td>${gb(c국영수)}</td>
+      <td class="cell-num">${allAvgS?allAvgS.toFixed(1):'–'}</td>
+    </tr>`;
+  })();
+
+  // ── 교과조합 상세 테이블 ────────────────────────────────────
+  const comboHdr=stuData.map((s,si)=>
+    `<th style="color:${SEM_COLORS[si%SEM_COLORS.length]};white-space:nowrap">${esc(s.semName)}</th>`
+  ).join('')+`<th style="color:#333;white-space:nowrap;background:#FFF7E0">전체학기</th>`;
+  const comboRows=COMBOS.map(c=>{
+    const cells=stuData.map(s=>{
+      const combo=calcCombos(s.records).find(x=>x.key===c.key);
+      const g=combo?.avgGrade;
+      const isExam=s.type==='exam'||s.records.some(r=>r.가등급&&!r.석차등급);
+      return`<td><span class="avg-badge" style="background:${g?gradeHex(g)+(isExam?'88':'66'):'#f5f5f5'};${isExam&&g?'outline:1.5px solid #7030A0;outline-offset:-1px':''}">
+        ${g?g.toFixed(2):'–'}</span></td>`;
+    }).join('');
+    const allG=allCombos.find(x=>x.key===c.key)?.avgGrade;
+    const allCell=`<td style="background:#FFF7E0"><span class="avg-badge" style="background:${allG?gradeHex(allG):'#f5f5f5'};font-weight:800">
+      ${allG?allG.toFixed(2):'–'}</span></td>`;
+    return`<tr><td class="subj-name" style="font-weight:700">${esc(c.label)}</td>${cells}${allCell}</tr>`;
+  }).join('');
+
+  // ── 과목별 성적 테이블 (학기별) ─────────────────────────────
+  const semTables=stuData.map((s,si)=>{
+    const recs=s.records;
+    const isExam=s.type==='exam'||recs.some(r=>r.가등급&&!r.석차등급);
+    const semColor=SEM_COLORS[si%SEM_COLORS.length];
+    const recRows=recs.map(r=>{
+      const g=r.석차등급;
+      const diff=r.원점수!=null&&r.과목평균!=null?r.원점수-r.과목평균:null;
+      const diffStr=diff!=null?(diff>=0?'+':'')+diff.toFixed(1):'';
+      return`<tr>
+        <td class="subj-name">${esc(r.과목)}</td>
+        <td class="cell-num">${r.원점수??'–'}</td>
+        <td class="cell-num">${r.과목평균??'–'}</td>
+        <td style="color:${diff==null?'inherit':diff>=0?'#2E9E5B':'#F8696B'};font-weight:600">${diffStr||'–'}</td>
+        <td><span class="achv" style="background:${achvHex(r.성취도)}">${r.성취도||'–'}</span></td>
+        <td>${g?`<span class="gchip" style="background:${GRADE_HEX[g]}">${g}등급</span>`
+           :r.가등급?`<span class="gchip" style="background:${GRADE_HEX[r.가등급]};color:#7030A0;outline:2px solid #7030A0;outline-offset:-2px">(가)${r.가등급}등급</span>`:'–'}</td>
+        <td class="muted">${r.가등급&&r.전교등수?`${r.전교등수}/${r.전교수강자||'?'}`:r.수강자수||'–'}</td>
+      </tr>`;
+    }).join('');
+    return`<div style="margin-top:20px">
+      <div style="font-weight:800;margin-bottom:8px;font-size:14px;display:flex;align-items:center;gap:8px">
+        <span style="width:12px;height:12px;border-radius:50%;background:${semColor};display:inline-block"></span>
+        <span style="color:${isExam?'#7030A0':'var(--navy)'}">${esc(s.semName)}</span>
+        ${isExam?'<span style="font-size:11px;background:#F3E5F5;color:#7030A0;padding:2px 8px;border-radius:6px">가등급</span>':''}
+      </div>
+      <div class="scroll"><table>
+        <thead><tr><th class="subj-name">과목</th><th>원점수</th><th>과목평균</th><th>평균대비</th><th>성취도</th><th>석차등급</th><th>수강자수</th></tr></thead>
+        <tbody>${recRows}</tbody>
+      </table></div>
+    </div>`;
+  }).join('');
+
+  return`
+  <!-- 학기별 요약 -->
+  <div style="margin:16px 0 0">
+    <div style="font-weight:800;color:var(--navy);font-size:14px;margin-bottom:8px">📋 학기별 요약</div>
+    <div class="scroll">
+      <table><thead><tr>
+        <th class="subj-name">학기</th><th>과목수</th>
+        <th>전교과</th><th>국영수사과</th><th>국영수사</th><th>국영수과</th><th>국영수</th><th>평균 원점수</th>
+      </tr></thead><tbody>${summaryRows}${allSummaryRow}</tbody></table>
+    </div>
+  </div>
+
+  <!-- 학기별 과목 그래프 -->
+  <div style="margin-top:22px">
+    <div style="font-weight:800;color:var(--navy);font-size:14px;margin-bottom:4px">📊 학기별 과목 석차등급</div>
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:12px">보라색 점선 = 가등급 · 화면이 넓으면 학기가 나란히 표시됩니다</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:14px">
+    ${stuData.map((s,si)=>{
+      const isExam=s.type==='exam'||s.records.some(r=>r.가등급&&!r.석차등급);
+      const color=isExam?'#7030A0':SEM_COLORS[si%SEM_COLORS.length];
+      return`<div style="background:#FAFBFD;border:1px solid var(--line);border-radius:12px;padding:14px">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:7px">
+          <span style="width:12px;height:12px;border-radius:50%;background:${color};display:inline-block"></span>
+          <span style="color:${isExam?'#7030A0':'var(--navy)'}">${esc(s.semName)}</span>
+          ${isExam?'<span style="font-size:11px;background:#F3E5F5;color:#7030A0;padding:2px 8px;border-radius:6px">가등급</span>':''}
+        </div>
+        ${renderSingleSemSubjChart(s,si)}
+      </div>`;
+    }).join('')}
+    </div>
+  </div>
+
+  <!-- 교과조합 추이 차트 -->
+  <div style="margin-top:22px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px">
+      <div style="font-weight:800;color:var(--navy);font-size:14px">📈 교과조합별 학기별 추이</div>
+      <div style="display:flex;gap:4px;background:#EEF1F6;border-radius:8px;padding:3px">
+        <button class="combo-chart-toggle" data-type="line" style="border:none;background:${state.comboChartType==='line'?'#fff':'transparent'};
+          box-shadow:${state.comboChartType==='line'?'0 1px 3px rgba(0,0,0,.12)':'none'};color:${state.comboChartType==='line'?'var(--navy)':'#8A97AB'};
+          font-weight:700;font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer">📈 선 그래프</button>
+        <button class="combo-chart-toggle" data-type="bar" style="border:none;background:${state.comboChartType==='bar'?'#fff':'transparent'};
+          box-shadow:${state.comboChartType==='bar'?'0 1px 3px rgba(0,0,0,.12)':'none'};color:${state.comboChartType==='bar'?'var(--navy)':'#8A97AB'};
+          font-weight:700;font-size:12px;padding:5px 12px;border-radius:6px;cursor:pointer">📊 막대 그래프</button>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--txt3);margin-bottom:10px">낮을수록 우수 · 가등급 포함 가중 평균 · ${state.comboChartType==='line'?'굵은 검정 별표 선':'검정 테두리 막대'} = 전체학기 누적</div>
+    ${state.comboChartType==='bar'?renderComboBarChart(stuData):renderComboLineChart(stuData)}
+  </div>
+
+  <!-- 교과조합 상세 표 -->
+  <div style="margin-top:22px">
+    <div style="font-weight:800;color:var(--navy);font-size:14px;margin-bottom:8px">🔢 교과조합별 평균 등급</div>
+    <div class="scroll">
+      <table><thead><tr><th class="subj-name">교과조합</th>${comboHdr}</tr></thead>
+      <tbody>${comboRows}</tbody></table>
+    </div>
+  </div>
+
+  <!-- 학기별 과목 상세 -->
+  <div style="margin-top:22px">
+    <div style="font-weight:800;color:var(--navy);font-size:14px;margin-bottom:4px">📝 학기별 과목 상세</div>
+    ${semTables}
+  </div>`;
+}
+
+// ══ 반별 비교 ══════════════════════════════════════════════════
+function renderClass(){
+  if(!state.semesters.length){
+    view.innerHTML=`<div class="card" style="margin-top:20px"><p class="hint">데이터를 먼저 업로드해주세요.</p></div>`;
+    return;
+  }
+
+  const sem = state.semesters.find(s=>s.id===state.selSem)||state.semesters[state.semesters.length-1];
+
+  // 반별 그룹화
+  const banMap={};
+  sem.students.forEach(s=>{
+    const ban=s.반||'전체';
+    if(!banMap[ban]) banMap[ban]={반:ban,students:[]};
+    banMap[ban].students.push(s);
+  });
+  const bans=Object.values(banMap);
+
+  // 과목 목록
+  const allRecs=sem.students.flatMap(s=>s.records);
+  const subjects=[...new Set(allRecs.map(r=>r.과목))];
+
+  const rows=bans.map(b=>{
+    const recs=b.students.flatMap(s=>s.records);
+    const subjCells=subjects.map(subj=>{
+      const sr=recs.filter(r=>r.과목===subj);
+      const g=avg(sr.filter(r=>r.석차등급).map(r=>r.석차등급));
+      return`<td><span class="gchip" style="background:${g?gradeHex(g)+'99':'#f5f5f5'};min-width:40px">${g?g.toFixed(2):'–'}</span></td>`;
+    }).join('');
+    const totalG=avg(recs.filter(r=>r.석차등급).map(r=>r.석차등급));
+    return`<tr>
+      <td class="subj-name">${esc(b.반)}</td>
+      <td class="muted">${b.students.length}명</td>
+      ${subjCells}
+      <td><span class="avg-badge" style="background:${totalG?gradeHex(totalG)+'88':'#f5f5f5'}">${totalG?totalG.toFixed(2):'–'}</span></td>
+    </tr>`;
+  }).join('');
+
+  const subjHeaders=subjects.map(s=>`<th>${esc(s)}</th>`).join('');
+
+  view.innerHTML=`
+  <div class="card" style="margin-top:20px">
+    <div class="card-head"><h3>반별 과목 평균 등급 비교</h3></div>
+    <div class="sub">${esc(sem.name)} · 색이 초록에 가까울수록 우수합니다.</div>
+    <div class="scroll">
+      <table><thead><tr>
+        <th class="subj-name">반</th><th>인원</th>
+        ${subjHeaders}
+        <th>전체 평균</th>
+      </tr></thead>
+      <tbody>${rows}</tbody></table>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head"><h3>학기별 전체 평균 등급 추이</h3></div>
+    <div class="sub">등록된 모든 학기의 평균 등급 변화</div>
+    ${state.semesters.length>1?renderTrendChart():`<p class="hint">학기가 2개 이상 있을 때 추이를 볼 수 있습니다.</p>`}
+  </div>`;
+}
+
+// ─── 칩 렌더링 ───────────────────────────────────────────────
+function renderChips(){
+  const el=document.getElementById('chips');
+  if(!state.semesters.length){
+    el.innerHTML=`<span class="muted" style="font-size:13px">아직 업로드된 데이터가 없습니다.</span>`;
+    return;
+  }
+  el.innerHTML=state.semesters.map(s=>
+    `<span class="chip ${s.id===state.selSem?'active':''}" data-id="${s.id}" title="더블클릭하면 이름을 수정할 수 있어요">
+      ${esc(s.name)}<span class="chip-sem">${s.students.length}명</span>
+      <span class="x" data-del="${s.id}" title="삭제">×</span>
+    </span>`
+  ).join('');
+  el.querySelectorAll('.chip').forEach(c=>{
+    c.addEventListener('click',e=>{
+      if(e.target.dataset.del) return;
+      state.selSem=c.dataset.id;
+      renderChips(); render();
+    });
+    c.addEventListener('dblclick',e=>{
+      if(e.target.dataset.del) return;
+      const sem=state.semesters.find(s=>s.id===c.dataset.id);
+      if(!sem) return;
+      const newName=prompt('학기 이름을 수정하세요', sem.name);
+      if(newName==null) return;
+      const trimmed=newName.trim();
+      if(!trimmed){toast('이름을 입력해주세요.');return;}
+      sem.name=trimmed;
+      renderChips(); render();
+      toast('✅ 학기 이름이 변경되었습니다.');
+    });
+  });
+  el.querySelectorAll('.x').forEach(x=>{
+    x.addEventListener('click',e=>{
+      e.stopPropagation();
+      if(!confirm('이 학기 데이터를 삭제할까요?')) return;
+      state.semesters=state.semesters.filter(s=>s.id!==x.dataset.del);
+      if(state.selSem===x.dataset.del) state.selSem=state.semesters[0]?.id||null;
+      renderChips(); render();
+    });
+  });
+
+  // 중복 학기 감지 시 버튼 표시
+  const nameCount={};
+  state.semesters.forEach(s=>{nameCount[s.name]=(nameCount[s.name]||0)+1;});
+  const hasDup=Object.values(nameCount).some(v=>v>1);
+  const dupBtn=document.getElementById('btnMergeDup');
+  if(dupBtn) dupBtn.style.display=hasDup?'':'none';
+}
+
+// 중복 학기 자동 정리
+document.getElementById('btnMergeDup')?.addEventListener('click',()=>{
+  const merged={};
+  state.semesters.forEach(s=>{
+    if(!merged[s.name]){
+      merged[s.name]={...s,students:[...s.students]};
+    } else {
+      const existNums=new Set(merged[s.name].students.map(st=>st.번호+'_'+st.반));
+      s.students.forEach(st=>{
+        if(!existNums.has(st.번호+'_'+st.반)) merged[s.name].students.push(st);
+      });
+    }
+  });
+  // 학기명 정렬 (1학기 → 2학기 → 가등급 순)
+  const order=['1학기','2학기','정기고사','가등급'];
+  state.semesters=Object.values(merged).sort((a,b)=>{
+    const ai=order.findIndex(o=>a.name.includes(o));
+    const bi=order.findIndex(o=>b.name.includes(o));
+    if(ai>=0&&bi>=0) return ai-bi;
+    return a.name.localeCompare(b.name);
+  });
+  state.selSem=state.semesters[0]?.id||null;
+  renderChips(); render();
+  toast('✅ 중복 학기 정리 완료');
+});
+
+// ─── 탭 이벤트 ───────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    state.tab=t.dataset.tab;
+    render();
+  });
+});
+
+// ─── 업로드 ─────────────────────────────────────────────────
+let pendingFiles=[];
+document.getElementById('btnUpload').onclick=()=>openModal();
+document.getElementById('mCancel').onclick=()=>closeModal();
+
+function openModal(){
+  pendingFiles=[];
+  document.getElementById('fileList').innerHTML='';
+  document.getElementById('semName').value='';
+  document.getElementById('semYear').value=new Date().getFullYear();
+  document.getElementById('modal').classList.add('show');
+}
+function closeModal(){document.getElementById('modal').classList.remove('show');}
+
+const dropZone=document.getElementById('dropZone');
+const fileInput=document.getElementById('fileInput');
+
+dropZone.onclick=()=>fileInput.click();
+dropZone.addEventListener('dragover',e=>{e.preventDefault();dropZone.classList.add('over');});
+dropZone.addEventListener('dragleave',()=>dropZone.classList.remove('over'));
+dropZone.addEventListener('drop',e=>{e.preventDefault();dropZone.classList.remove('over');handleFiles(e.dataTransfer.files);});
+fileInput.onchange=e=>handleFiles(e.target.files);
+
+function handleFiles(files){
+  for(const f of files){
+    if(!f.name.match(/\.(xlsx|xls)$/i)) continue;
+    if(pendingFiles.find(p=>p.name===f.name)) continue;
+    pendingFiles.push(f);
+  }
+  renderFileList();
+}
+
+function renderFileList(){
+  const el=document.getElementById('fileList');
+  el.innerHTML=pendingFiles.map((f,i)=>
+    `<div class="fitem">
+      <span class="fn" title="${esc(f.name)}">${esc(f.name)}</span>
+      <span class="rm" data-i="${i}">✕</span>
+    </div>`
+  ).join('');
+  el.querySelectorAll('.rm').forEach(r=>{
+    r.onclick=()=>{pendingFiles.splice(parseInt(r.dataset.i),1);renderFileList();};
+  });
+}
+
+document.getElementById('mAdd').onclick=async()=>{
+  if(!pendingFiles.length){toast('파일을 먼저 선택해주세요.');return;}
+  const semName=document.getElementById('semName').value.trim();
+  const semYear=document.getElementById('semYear').value.trim();
+
+  const id=uid();
+  // semLabel별로 학생 모음
+  const semGroupMap={};  // semLabel → students[]
+  const allSemGroups=[];
+
+  for(const f of pendingFiles){
+    try{
+      const ab=await f.arrayBuffer();
+      const wb=XLSX.read(ab,{type:'array'});
+      const groups=parseNaisWorkbook(wb);  // 배열 반환
+      for(const grp of groups){
+        const key=grp.semLabel||'__single__';
+        if(!semGroupMap[key]){
+          semGroupMap[key]={semLabel:grp.semLabel,students:[]};
+          allSemGroups.push(semGroupMap[key]);
+        }
+        semGroupMap[key].students.push(...grp.students);
+      }
+    }catch(e){
+      toast(`파싱 오류: ${f.name}`); console.error(e);
+    }
+  }
+  // 하위 호환: allStudents
+  const allStudents=allSemGroups.flatMap(g=>g.students);
+
+  if(!allStudents.length){toast('파싱된 학생 데이터가 없습니다.');return;}
+
+  // 학년+학기가 자동 인식된 경우 그 이름을 그대로 사용 (예: "1학년 1학기", "2학년 1학기").
+  // 자동 인식이 안 된 파일만 입력하신 학기 이름(또는 기본값 '학기')을 사용합니다.
+  const addedNames=[];
+  for(const grp of allSemGroups){
+    const grpName=grp.semLabel || (semName||'학기');
+    const existing=state.semesters.find(s=>s.name===grpName);
+    if(existing){
+      // 기존 학기에 새 학생 병합 (번호 기준 중복 제거)
+      const existNums=new Set(existing.students.map(s=>s.번호+'_'+s.반));
+      const newStus=grp.students.filter(s=>!existNums.has(s.번호+'_'+s.반));
+      existing.students.push(...newStus);
+      state.selSem=existing.id;
+      addedNames.push(`${grpName}(병합+${newStus.length}명)`);
+    } else {
+      const grpId=uid();
+      state.semesters.push({id:grpId,name:grpName,year:semYear,students:grp.students});
+      state.selSem=grpId;
+      addedNames.push(`${grpName}(${grp.students.length}명)`);
+    }
+  }
+  closeModal();
+  renderChips();
+  render();
+  toast(`✅ ${addedNames.join(' / ')}`);
+};
+
+// ─── 가등급 업로드 이벤트 ────────────────────────────────────
+let pendingExamFile=null;
+document.getElementById('btnExam').onclick=()=>{
+  pendingExamFile=null;
+  document.getElementById('examFileShow').innerHTML='';
+  document.getElementById('examSemName').value='';
+  document.getElementById('examParseResult').innerHTML='';
+  document.getElementById('examModal').classList.add('show');
+};
+document.getElementById('examCancel').onclick=()=>document.getElementById('examModal').classList.remove('show');
+
+const examDropZone=document.getElementById('examDropZone');
+const examFileInput=document.getElementById('examFileInput');
+examDropZone.onclick=()=>examFileInput.click();
+examDropZone.addEventListener('dragover',e=>{e.preventDefault();examDropZone.classList.add('over');});
+examDropZone.addEventListener('dragleave',()=>examDropZone.classList.remove('over'));
+examDropZone.addEventListener('drop',e=>{
+  e.preventDefault();examDropZone.classList.remove('over');
+  const f=e.dataTransfer.files[0];
+  if(f) handleExamFile(f);
+});
+examFileInput.onchange=e=>{if(e.target.files[0]) handleExamFile(e.target.files[0]);};
+
+async function handleExamFile(f){
+  if(!f.name.match(/\.(xlsx|xls)$/i)){toast('엑셀 파일(.xlsx)만 가능합니다.');return;}
+  pendingExamFile=f;
+  document.getElementById('examFileShow').innerHTML=
+    `<div class="fitem"><span class="fn">${esc(f.name)}</span></div>`;
+  // 미리 파싱해서 과목·학생 수 표시
+  try{
+    const ab=await f.arrayBuffer();
+    const wb=XLSX.read(ab,{type:'array'});
+    const {records,gradeMap}=parseExamWorkbook(wb);
+    const subjCnt=Object.keys(gradeMap).length;
+    const banCnt=new Set(records.map(r=>r.반)).size;
+    document.getElementById('examParseResult').innerHTML=
+      `<span style="color:#2E9E5B;font-weight:700">✅ 파싱 완료</span> · 
+       ${records.length}명 · ${banCnt}개 반 · ${subjCnt}개 과목`;
+  }catch(e){
+    document.getElementById('examParseResult').innerHTML=
+      `<span style="color:#F8696B;font-weight:700">⚠️ 파싱 오류: ${e.message}</span>`;
+  }
+}
+
+document.getElementById('examAdd').onclick=async()=>{
+  if(!pendingExamFile){toast('파일을 먼저 선택해주세요.');return;}
+  const semName=document.getElementById('examSemName').value.trim()||'정기고사 가등급';
+  try{
+    const ab=await pendingExamFile.arrayBuffer();
+    const wb=XLSX.read(ab,{type:'array'});
+    const examData=parseExamWorkbook(wb);
+    const sem=examToSemester(examData,semName);
+    state.semesters.push(sem);
+    state.selSem=sem.id;
+    document.getElementById('examModal').classList.remove('show');
+    renderChips(); render();
+    toast(`'${semName}' 가등급 추가됨 · ${sem.students.length}명`);
+  }catch(e){
+    toast(`오류: ${e.message}`); console.error(e);
+  }
+};
+
+// ─── 등급·성취도·원점수 3파일 업로드 이벤트 ──────────────────
+let threeFiles={grade:null, achv:null, score:null};
+
+document.getElementById('btnThree').onclick=()=>{
+  threeFiles={grade:null, achv:null, score:null};
+  document.getElementById('threeGradeShow').value='';
+  document.getElementById('threeAchvShow').value='';
+  document.getElementById('threeScoreShow').value='';
+  document.getElementById('threeSemName').value='';
+  document.getElementById('threeParseResult').innerHTML='';
+  document.getElementById('threeModal').classList.add('show');
+};
+document.getElementById('threeCancel').onclick=()=>document.getElementById('threeModal').classList.remove('show');
+
+function bindThreePicker(kind, btnId, inputId, showId){
+  const btn=document.getElementById(btnId), inp=document.getElementById(inputId), show=document.getElementById(showId);
+  btn.onclick=()=>inp.click();
+  inp.onchange=e=>{
+    const f=e.target.files[0];
+    if(!f) return;
+    if(!f.name.match(/\.(xlsx|xls)$/i)){toast('엑셀 파일(.xlsx)만 가능합니다.');return;}
+    threeFiles[kind]=f;
+    show.value=f.name;
+  };
+}
+bindThreePicker('grade','threeGradeBtn','threeGradeInput','threeGradeShow');
+bindThreePicker('achv','threeAchvBtn','threeAchvInput','threeAchvShow');
+bindThreePicker('score','threeScoreBtn','threeScoreInput','threeScoreShow');
+
+document.getElementById('threeAdd').onclick=async()=>{
+  if(!threeFiles.grade||!threeFiles.achv||!threeFiles.score){
+    toast('등급·성취도·원점수 파일을 모두 선택해주세요.'); return;
+  }
+  const semName=document.getElementById('threeSemName').value.trim()||'분리파일 학기';
+  try{
+    const [gAb,aAb,sAb]=await Promise.all([
+      threeFiles.grade.arrayBuffer(), threeFiles.achv.arrayBuffer(), threeFiles.score.arrayBuffer()
+    ]);
+    const gWb=XLSX.read(gAb,{type:'array'}), aWb=XLSX.read(aAb,{type:'array'}), sWb=XLSX.read(sAb,{type:'array'});
+    const gRaw=XLSX.utils.sheet_to_json(gWb.Sheets[gWb.SheetNames[0]],{header:1,defval:''});
+    const aRaw=XLSX.utils.sheet_to_json(aWb.Sheets[aWb.SheetNames[0]],{header:1,defval:''});
+    const sRaw=XLSX.utils.sheet_to_json(sWb.Sheets[sWb.SheetNames[0]],{header:1,defval:''});
+    const {students}=parseThreeFilesRows(gRaw, aRaw, sRaw);
+
+    if(!students.length){toast('파싱된 학생 데이터가 없습니다. 파일 형식을 확인해주세요.');return;}
+
+    // 같은 이름의 학기가 있으면 학생 단위로 병합, 없으면 새 학기 생성
+    const existing=state.semesters.find(s=>s.name===semName);
+    let addedMsg;
+    if(existing){
+      const stuByKey={};
+      for(const s of existing.students) stuByKey[s.번호+'_'+s.반]=s;
+      let mergedStu=0, newStu=0;
+      for(const s of students){
+        const key=s.번호+'_'+s.반;
+        if(stuByKey[key]){
+          stuByKey[key].records.push(...s.records);
+          mergedStu++;
+        } else {
+          existing.students.push(s);
+          newStu++;
+        }
+      }
+      state.selSem=existing.id;
+      addedMsg=`'${semName}' 기존 학기에 병합 (기존 학생 ${mergedStu}명 과목 추가, 신규 ${newStu}명)`;
+    } else {
+      const semId=uid();
+      state.semesters.push({id:semId, name:semName, year:'', students});
+      state.selSem=semId;
+      addedMsg=`'${semName}' 추가됨 · ${students.length}명`;
+    }
+    document.getElementById('threeModal').classList.remove('show');
+    renderChips(); render();
+    toast(`✅ ${addedMsg}`);
+  }catch(e){
+    toast(`오류: ${e.message}`); console.error(e);
+  }
+};
+
+// ─── 저장 ────────────────────────────────────────────────────
+document.getElementById('btnSave').onclick=()=>{
+  const data=JSON.stringify({semesters:state.semesters});
+  const html=document.documentElement.outerHTML.replace(
+    /(<script type="application\/json" id="saved-data">)[^<]*(<\/script>)/,
+    `$1${data}$2`
+  );
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`내신성적분석_${new Date().toISOString().slice(0,10)}.html`;
+  a.click();
+  toast('HTML 파일 저장됨');
+};
+
+// ─── 토스트 ──────────────────────────────────────────────────
+function toast(m){
+  const t=document.getElementById('toast');
+  t.textContent=m;t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),2300);
+}
+
+// ─── 초기 로드 ───────────────────────────────────────────────
+(function init(){
+  try{
+    const saved=JSON.parse(document.getElementById('saved-data').textContent||'{}');
+    if(saved.semesters?.length){
+      state.semesters=saved.semesters;
+      state.selSem=saved.semesters[saved.semesters.length-1].id;
+    }
+  }catch(e){}
+  renderChips();
+  render();
+})();
+</script>
+</body>
+</html>

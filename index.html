@@ -273,19 +273,20 @@ select:focus,input:focus{border-color:var(--blue)}
 <div class="ov" id="examModal">
   <div class="modal" style="width:560px">
     <h3>📝 정기고사 성적 → 가등급 계산</h3>
-    <p>나이스 <b>전과목 성적 일람표</b> 엑셀 파일을 업로드하면<br>
-       전교생 기준 Z점수로 <b>5등급 가등급</b>을 자동 계산하여 새 학기로 추가합니다.</p>
+    <p><b>학교 성적일람표(등급 포함)</b> 엑셀 파일(1~10반 등 여러 개)을 한꺼번에 선택하면<br>
+       파일에 들어 있는 <b>5등급제 등급을 그대로</b> 읽어 새 학기로 추가합니다.<br>
+       <span style="font-size:12px;color:var(--txt3)">(나이스 전과목 성적 일람표 1개를 올리면 기존 방식인 Z점수 추정으로 계산합니다)</span></p>
     <div class="upload-zone" id="examDropZone">
       <div class="icon">📊</div>
-      <p>전과목 성적 일람표 엑셀 파일 선택</p>
-      <small>나이스 → 성적처리 → 전과목 성적 일람표 → 엑셀 저장</small>
+      <p>성적일람표 엑셀 파일 선택 (여러 개 가능)</p>
+      <small>원점수(+N)(M명) · 등급 5(4) 형태의 반별 파일을 모두 선택하세요</small>
     </div>
-    <input type="file" id="examFileInput" accept=".xlsx,.xls" style="display:none">
+    <input type="file" id="examFileInput" accept=".xlsx,.xls" multiple style="display:none">
     <div id="examFileShow" style="margin-top:8px"></div>
     <label>학기 이름 (예: 2학년 1학기 1차)</label>
     <input type="text" id="examSemName" placeholder="예: 2학년 1학기 1차 정기고사" style="width:100%">
     <div style="margin-top:14px;background:#F7F9FD;border:1px solid var(--line);border-radius:10px;padding:12px 14px">
-      <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:8px">📐 가등급 기준 (5등급제)</div>
+      <div style="font-size:12px;font-weight:700;color:var(--txt2);margin-bottom:8px">📐 Z점수 추정 시 가등급 기준 (5등급제) · 성적일람표 등급 파일에는 적용되지 않음</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;font-size:12px">
         <span style="background:#63BE7B;padding:3px 10px;border-radius:6px;font-weight:700">1등급 ≤ 상위 10%</span>
         <span style="background:#A8D07E;padding:3px 10px;border-radius:6px;font-weight:700">2등급 ≤ 상위 34%</span>
@@ -764,6 +765,85 @@ function parseExamWorkbook(wb){
   });
 
   return{records,subjects:Object.values(subjects),gradeMap};
+}
+
+// ─── 학교 성적일람표(등급 포함, 반별 .xls) 파서 ──────────────────
+// 형식: 1행=교과, 2행=과목(학점) / 학생당 2행: [원점수(+N)(M명)] , [등급 5(4)]
+const ILRAM_CELL=/^\s*(-?[\d.]+)\s*\(\s*[+\-]?\d+\s*\)\s*\(\s*\d+\s*명\s*\)\s*$/;
+const ILRAM_FULL=/^\s*(-?[\d.]+)\s*\(\s*([+\-]?\d+)\s*\)\s*\(\s*(\d+)\s*명\s*\)\s*$/;
+function rowsOfWb(wb){
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  return XLSX.utils.sheet_to_json(ws,{header:1,defval:null,raw:true});
+}
+function isIlramWorkbook(wb){
+  try{
+    const rows=rowsOfWb(wb);
+    if(String(rows[0]?.[5]||'').replace(/\s+/g,'')!=='점수구분') return false;
+    let hit=0;
+    for(let i=2;i<Math.min(rows.length,12);i++){
+      for(let c=6;c<(rows[i]||[]).length;c++){
+        if(ILRAM_CELL.test(String(rows[i][c]??''))) hit++;
+      }
+    }
+    return hit>=3;
+  }catch(e){return false;}
+}
+// 과목명 정규화: 로마숫자(I,II→Ⅰ,Ⅱ) + 이미 등록된 과목명의 띄어쓰기에 맞춤
+function buildSubjNameLookup(){
+  const m={};
+  state.semesters.forEach(sem=>sem.students.forEach(st=>st.records.forEach(r=>{
+    if(r.과목) m[String(r.과목).replace(/\s+/g,'')]=r.과목;
+  })));
+  Object.keys(EDU_MAP).forEach(k=>{m[k.replace(/\s+/g,'')]=k;});
+  return m;
+}
+function canonSubj(name,lookup){
+  let n=String(name).trim().replace(/II$/,'Ⅱ').replace(/I$/,'Ⅰ');
+  return lookup[n.replace(/\s+/g,'')]||n;
+}
+function parseIlramWorkbook(wb,lookup){
+  const rows=rowsOfWb(wb);
+  const head=rows[1]||[];
+  const subjCols=[];
+  for(let c=6;c<head.length;c++){
+    const t=String(head[c]??'').trim();
+    if(!t) continue;
+    const m=t.match(/^(.*?)\s*\((\d+)\)\s*$/);
+    subjCols.push({c,name:canonSubj(m?m[1]:t,lookup),credit:m?+m[2]:0});
+  }
+  const students=[];
+  for(let i=2;i<rows.length-1;i++){
+    const r=rows[i]||[];
+    const nm=r[4];
+    if(nm==null||String(nm).trim()==='') continue;
+    if(String(r[5]||'').replace(/\s+/g,'')!=='원점수') continue;
+    const g=rows[i+1]||[];
+    const recs=[];
+    subjCols.forEach(sc=>{
+      const cell=r[sc.c]; if(cell==null) return;
+      const m=String(cell).match(ILRAM_FULL); if(!m) return;
+      const gm=String(g[sc.c]??'').replace(/\s+/g,'').match(/^(\d)(?:\((\d)\))?$/);
+      if(!gm) return;
+      const score=parseFloat(m[1]);
+      recs.push({
+        교과:sc.name, 과목:sc.name, 학점:sc.credit,
+        원점수:score, 과목평균:null, 성취도:scoreToAchv(score),
+        석차등급:null, 가등급:+gm[1],        // 학교가 계산한 등급을 그대로 사용
+        상위퍼센트:null, 전교등수:null, 전교수강자:null, 수강자수:null,
+        다음등급필요점수:+m[2], 추월필요인원:+m[3],
+      });
+    });
+    if(recs.length) students.push({번호:+r[3]||r[3],이름:String(nm).trim(),반:`${r[2]}반`,records:recs});
+  }
+  return{students,subjects:subjCols.map(s=>s.name)};
+}
+function ilramToSemester(parts,semName){
+  const seen=new Set(),students=[];
+  parts.forEach(p=>p.students.forEach(st=>{
+    const k=st.반+'_'+st.번호;
+    if(seen.has(k)) return; seen.add(k); students.push(st);
+  }));
+  return{id:uid(),name:semName,type:'exam',students};
 }
 
 function round2(v){return Math.round(v*100)/100;}
@@ -1260,6 +1340,9 @@ const EDU_MAP={
   '경제':'사회','윤리와 사상':'사회','생활과 윤리':'사회','세계시민과 지리':'사회','한국지리':'사회',
   '통합과학1':'과학','통합과학2':'과학','물리학':'과학','화학':'과학','생명과학':'과학','지구과학':'과학',
   '한국사1':'한국사','한국사2':'한국사',
+  '독서와 작문':'국어','미적분Ⅰ':'수학','미적분Ⅱ':'수학','영어독해와 작문':'영어',
+  '도시의 미래 탐구':'사회','인문학과 윤리':'사회','사회·문화':'사회',
+  '물질과 에너지':'과학','세포와 물질대사':'과학','전자기와 양자':'과학','지구시스템과학':'과학',
 };
 const COMBOS=[
   {key:'전교과',  label:'전교과',    set:null},
@@ -2176,9 +2259,9 @@ document.getElementById('mAdd').onclick=async()=>{
 };
 
 // ─── 가등급 업로드 이벤트 ────────────────────────────────────
-let pendingExamFile=null;
+let pendingExamFiles=[];
 document.getElementById('btnExam').onclick=()=>{
-  pendingExamFile=null;
+  pendingExamFiles=[];
   document.getElementById('examFileShow').innerHTML='';
   document.getElementById('examSemName').value='';
   document.getElementById('examParseResult').innerHTML='';
@@ -2193,40 +2276,67 @@ examDropZone.addEventListener('dragover',e=>{e.preventDefault();examDropZone.cla
 examDropZone.addEventListener('dragleave',()=>examDropZone.classList.remove('over'));
 examDropZone.addEventListener('drop',e=>{
   e.preventDefault();examDropZone.classList.remove('over');
-  const f=e.dataTransfer.files[0];
-  if(f) handleExamFile(f);
+  if(e.dataTransfer.files.length) handleExamFiles([...e.dataTransfer.files]);
 });
-examFileInput.onchange=e=>{if(e.target.files[0]) handleExamFile(e.target.files[0]);};
+examFileInput.onchange=e=>{if(e.target.files.length) handleExamFiles([...e.target.files]); e.target.value='';};
 
-async function handleExamFile(f){
-  if(!f.name.match(/\.(xlsx|xls)$/i)){toast('엑셀 파일(.xlsx)만 가능합니다.');return;}
-  pendingExamFile=f;
-  document.getElementById('examFileShow').innerHTML=
-    `<div class="fitem"><span class="fn">${esc(f.name)}</span></div>`;
-  // 미리 파싱해서 과목·학생 수 표시
+async function readWb(f){
+  const ab=await f.arrayBuffer();
+  return XLSX.read(ab,{type:'array'});
+}
+function banNum(txt){const m=String(txt).match(/(\d+)반/);return m?+m[1]:0;}
+
+async function handleExamFiles(files){
+  files=files.filter(f=>/\.(xlsx|xls)$/i.test(f.name));
+  if(!files.length){toast('엑셀 파일(.xls, .xlsx)만 가능합니다.');return;}
+  pendingExamFiles=files;
+  document.getElementById('examFileShow').innerHTML=files.map(f=>
+    `<div class="fitem"><span class="fn">${esc(f.name)}</span></div>`).join('');
+  const out=document.getElementById('examParseResult');
   try{
-    const ab=await f.arrayBuffer();
-    const wb=XLSX.read(ab,{type:'array'});
-    const {records,gradeMap}=parseExamWorkbook(wb);
-    const subjCnt=Object.keys(gradeMap).length;
-    const banCnt=new Set(records.map(r=>r.반)).size;
-    document.getElementById('examParseResult').innerHTML=
-      `<span style="color:#2E9E5B;font-weight:700">✅ 파싱 완료</span> · 
-       ${records.length}명 · ${banCnt}개 반 · ${subjCnt}개 과목`;
+    const lookup=buildSubjNameLookup();
+    let nIlram=0,nOther=0,stuCnt=0;const bans=new Set(),subj=new Set();
+    for(const f of files){
+      const wb=await readWb(f);
+      if(isIlramWorkbook(wb)){
+        nIlram++;
+        const d=parseIlramWorkbook(wb,lookup);
+        stuCnt+=d.students.length;
+        d.students.forEach(s=>bans.add(s.반)); d.subjects.forEach(x=>subj.add(x));
+      }else{
+        nOther++;
+        const {records,gradeMap}=parseExamWorkbook(wb);
+        stuCnt+=records.length;
+        records.forEach(r=>bans.add(r.반+'반')); Object.keys(gradeMap).forEach(x=>subj.add(x));
+      }
+    }
+    if(nOther>0&&(nIlram>0||files.length>1)){
+      out.innerHTML=`<span style="color:#F8696B;font-weight:700">⚠️ 형식이 다른 파일이 섞여 있습니다. 한 가지 형식만 선택해주세요.</span>`;
+      pendingExamFiles=[];return;
+    }
+    out.innerHTML=`<span style="color:#2E9E5B;font-weight:700">✅ 파싱 완료</span> · ${nIlram?'학교 등급 그대로 사용':'Z점수 추정'} ·
+       ${stuCnt}명 · ${bans.size}개 반 · ${subj.size}개 과목`;
   }catch(e){
-    document.getElementById('examParseResult').innerHTML=
-      `<span style="color:#F8696B;font-weight:700">⚠️ 파싱 오류: ${e.message}</span>`;
+    out.innerHTML=`<span style="color:#F8696B;font-weight:700">⚠️ 파싱 오류: ${esc(e.message)}</span>`;
   }
 }
 
 document.getElementById('examAdd').onclick=async()=>{
-  if(!pendingExamFile){toast('파일을 먼저 선택해주세요.');return;}
+  if(!pendingExamFiles.length){toast('파일을 먼저 선택해주세요.');return;}
   const semName=document.getElementById('examSemName').value.trim()||'정기고사 가등급';
   try{
-    const ab=await pendingExamFile.arrayBuffer();
-    const wb=XLSX.read(ab,{type:'array'});
-    const examData=parseExamWorkbook(wb);
-    const sem=examToSemester(examData,semName);
+    const lookup=buildSubjNameLookup();
+    const wbs=[];
+    for(const f of pendingExamFiles) wbs.push(await readWb(f));
+    let sem;
+    if(wbs.every(isIlramWorkbook)){
+      sem=ilramToSemester(wbs.map(wb=>parseIlramWorkbook(wb,lookup)),semName);
+    }else if(wbs.length===1){
+      sem=examToSemester(parseExamWorkbook(wbs[0]),semName);
+    }else{
+      toast('형식이 다른 파일이 섞여 있습니다.');return;
+    }
+    if(!sem.students.length){toast('읽을 수 있는 학생 성적이 없습니다.');return;}
     state.semesters.push(sem);
     state.selSem=sem.id;
     document.getElementById('examModal').classList.remove('show');
